@@ -44,6 +44,6 @@ export function spriteURL(key) {
     return new URL("bonsai/" + key.replace("bonsai_", "bonsai_stage_") + suffix + ".png", spriteRoot).href;
   }
   const user = key.slice(0, 3);
-  if (!["ppa", "tbv"].includes(user) || key.endsWith("_home_idle") || !ACTIVITY_IDS.has(key.slice(4))) return null;
+  if (!["ppa", "tbv"].includes(user) || !ACTIVITY_IDS.has(key.slice(4))) return null;
   return new URL(user + "/" + key + "_sheet.png", spriteRoot).href;
 }

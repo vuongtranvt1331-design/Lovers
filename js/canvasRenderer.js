@@ -358,7 +358,7 @@ export const CanvasRenderer = (() => {
       sprite = null;
       restart(latestTick);
       const url = spriteURL(key);
-      if (!url) return key === role + '_home_idle';
+      if (!url) return false;
 
       const pending = loadSheet(url);
       const sheet = await pending;
