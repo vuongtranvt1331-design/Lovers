@@ -1,4 +1,4 @@
-import { ACTIVITY_IDS, DAILY_QUESTS } from './catalog.js';
+import { canSelectActivity, DAILY_QUESTS } from './catalog.js?v=home-scenes';
 import { PocketDB } from './db.js';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, offsetDay, timestamp, today } from './gameTime.js';
 
@@ -44,7 +44,6 @@ export const FocusState = (() => {
     Number.isFinite(value) ? Math.min(max, Math.max(0, Math.trunc(value))) : fallback;
   const ruleFor = activity => REWARDS[REWARD_CATEGORY[activity]];
   const legacyReward = activity => activity === 'out_running' ? 15 : 10;
-  const hasActivity = activity => activity === IDLE || ACTIVITY_IDS.has(activity);
   const userKey = value => {
     const key = typeof value === 'string' ? value.toLowerCase() : '';
     return USERS.includes(key) ? key : '';
@@ -60,7 +59,7 @@ export const FocusState = (() => {
     const savedStart = timestamp(raw?.startTime);
     // Pre-upgrade saves did not distinguish a selected activity from the default clock.
     const explicitSession = raw?.explicitSession === true && savedStart !== null
-      && hasActivity(raw.currentActivity) && raw.currentActivity !== IDLE;
+      && canSelectActivity(key, raw.currentActivity) && raw.currentActivity !== IDLE;
     const currentActivity = explicitSession ? raw.currentActivity : IDLE;
     const startTime = explicitSession ? savedStart : null;
     const idleStartedAt = raw?.currentActivity === IDLE
@@ -586,7 +585,7 @@ export const FocusState = (() => {
 
     changeActivity(value, activity, now = Date.now(), expectedSessionVersion) {
       const key = userKey(value);
-      if (!key || !hasActivity(activity)) return Promise.resolve(false);
+      if (!key || !canSelectActivity(key, activity)) return Promise.resolve(false);
       const instant = time(now);
       const expected = expectedSessionVersion ?? model?.users[key]?.sessionVersion;
       return write(instant, (draft, logs) => {

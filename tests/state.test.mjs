@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
+import { ACTIVITY_TITLES, spriteURL } from '../js/catalog.js';
 import { PocketDB, splitLog } from '../js/db.js';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, today } from '../js/gameTime.js';
 import { FocusState } from '../js/state.js';
@@ -43,6 +44,29 @@ test('fresh profiles are idle and legacy default clocks do not earn passive rewa
   }
   assert.equal(FocusState.data.plant.dropsToday, 0);
   assert.equal(logs.length, 0);
+});
+
+test('football and playing with Cofi are profile-specific leisure sessions', async () => {
+  await FocusState.open(noon);
+  const activities = [
+    ['ppa', 'tbv', 'home_play_with_cofi', 'Chơi với Cofi'],
+    ['tbv', 'ppa', 'home_football', 'Xem bóng đá'],
+  ];
+  for (const [owner, other, activity, title] of activities) {
+    assert.equal(ACTIVITY_TITLES.get(activity), title);
+    assert.equal(spriteURL(`${other}_${activity}`), null);
+    assert.ok(spriteURL(`${owner}_${activity}`).endsWith(`/sprites/${owner}/${owner}_${activity}_sheet.png`));
+    assert.equal(await FocusState.changeActivity(other, activity, noon), false);
+    assert.equal(await FocusState.changeActivity(owner, activity, noon), true);
+    assert.equal(FocusState.elapsedMs(owner, noon + 10 * MINUTE), 10 * MINUTE);
+    assert.equal(FocusState.rewardInfo(owner, noon).category, null);
+  }
+  for (const [owner] of activities) await FocusState.changeActivity(owner, 'home_idle', noon + 20 * MINUTE);
+  const history = await FocusState.history(day);
+  for (const [owner, , activity] of activities) {
+    assert.equal(history.find(entry => entry.user === owner && entry.activity === activity).durationMinutes, 20);
+    assert.equal(FocusState.data.users[owner].waterDropsAvailable, 0);
+  }
 });
 
 test('rest clocks survive reload and log their own time across midnight without water', async () => {

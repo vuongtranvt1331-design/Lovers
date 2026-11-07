@@ -1,9 +1,9 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES, DAILY_QUESTS } from "./catalog.js";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS } from "./catalog.js?v=home-scenes";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=watering";
-import { FocusState } from "./state.js?v=watering";
-import { Timeline } from "./timeline.js?v=watering";
-import { createQuestDrawer } from "./quests.js?v=watering";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=home-scenes";
+import { FocusState } from "./state.js?v=home-scenes";
+import { Timeline } from "./timeline.js?v=home-scenes";
+import { createQuestDrawer } from "./quests.js?v=home-scenes";
 import { PocketDB } from "./db.js";
 import { offsetDay } from "./gameTime.js";
 
@@ -428,6 +428,7 @@ const FocusUI = (() => {
       if (quick[recent.kind]) playNudge("own", recent.kind);
     }
     for (const button of activityButtons) {
+      button.hidden = !canSelectActivity(profile, button.dataset.activity);
       button.setAttribute("aria-pressed", String(button.dataset.activity === own.currentActivity));
     }
   }

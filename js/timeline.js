@@ -1,6 +1,6 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js";
-import { CanvasRenderer } from "./canvasRenderer.js?v=watering";
-import { FocusState } from "./state.js?v=watering";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=home-scenes";
+import { CanvasRenderer } from "./canvasRenderer.js?v=home-scenes";
+import { FocusState } from "./state.js?v=home-scenes";
 import { DAY_MS, dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
 
 export const Timeline = (() => {

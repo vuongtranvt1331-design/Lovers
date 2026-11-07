@@ -6,6 +6,7 @@ export const ACTIVITY_GROUPS = [
     ["home_eating", "Dùng bữa", "◈"], ["home_chores", "Dọn nhà", "✧"],
     ["home_bed_rot", "Thư giãn trên sofa", "▣"], ["home_gaming", "Chơi game", "✚"],
     ["home_nap", "Chợp mắt", "☽"],
+    ["home_football", "Xem bóng đá", "⚽", "tbv"], ["home_play_with_cofi", "Chơi với Cofi", "🐾", "ppa"],
   ]],
   ["Chỗ làm", [
     ["work_locked_in", "Tập trung", "✦"], ["work_teaching", "Dạy học", "📚"], ["work_meeting", "Họp", "▥"],
@@ -22,8 +23,15 @@ export const ACTIVITY_GROUPS = [
     ["travel_driving_long", "Lái xe đường dài", "➜"], ["travel_hometown", "Về quê", "⌂"],
   ]],
 ];
-export const ACTIVITY_TITLES = new Map(ACTIVITY_GROUPS.flatMap(([, group]) => group.map(([id, name]) => [id, name])));
+const activities = ACTIVITY_GROUPS.flatMap(([, group]) => group);
+export const ACTIVITY_TITLES = new Map(activities.map(([id, name]) => [id, name]));
 export const ACTIVITY_IDS = new Set(ACTIVITY_TITLES.keys());
+const activityProfiles = new Map(activities.map(([id, , , profile]) => [id, profile]));
+
+export function canSelectActivity(user, activity) {
+  const exclusiveProfile = activityProfiles.get(activity);
+  return ACTIVITY_IDS.has(activity) && (exclusiveProfile === undefined || exclusiveProfile === user);
+}
 
 export const DAILY_QUESTS = [
   { id: "eat_veggies", title: "Ăn rau xanh", icon: "🥗", reward: 1 },
@@ -44,6 +52,6 @@ export function spriteURL(key) {
     return new URL("bonsai/" + key.replace("bonsai_", "bonsai_stage_") + suffix + ".png", spriteRoot).href;
   }
   const user = key.slice(0, 3);
-  if (!["ppa", "tbv"].includes(user) || !ACTIVITY_IDS.has(key.slice(4))) return null;
+  if (!["ppa", "tbv"].includes(user) || !canSelectActivity(user, key.slice(4))) return null;
   return new URL(user + "/" + key + "_sheet.png", spriteRoot).href;
 }
