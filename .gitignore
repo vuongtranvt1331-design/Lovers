@@ -1,0 +1,12 @@
+# Local secrets, dependencies, and Firebase Emulator data
+.env
+.env.*
+!.env.example
+node_modules/
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+firebase-export-*/
+*serviceAccountKey*.json
+*.pem
+*.p12

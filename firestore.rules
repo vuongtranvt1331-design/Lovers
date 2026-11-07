@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function accessPath() { return /databases/$(database)/documents/pocket_space/access; }
+    function roomPath() { return /databases/$(database)/documents/pocket_space/plant_state; }
+    function ppaPath() { return /databases/$(database)/documents/pocket_space/user_ppa; }
+    function tbvPath() { return /databases/$(database)/documents/pocket_space/user_tbv; }
+    function isRole(role) {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && get(accessPath()).data[role] == request.auth.uid;
+    }
+    function member() { return isRole('ppa') || isRole('tbv'); }
+    function sameRoomWrite(revision) {
+      return getAfter(roomPath()).data.revision == revision
+        && (!exists(roomPath()) || get(roomPath()).data.revision + 1 == revision);
+    }
+    function validProfile(data, role) {
+      return data.id == role && data.currentActivity is string
+        && data.sessionVersion is int && data.sessionVersion >= 0
+        && (data.lastActivityTimestamp == null || (data.lastActivityTimestamp is int
+          && data.lastActivityTimestamp <= request.time.toMillis() + 120000))
+        && data.waterDropsToday is int && data.waterDropsToday >= 0
+        && data.waterToday == data.waterDropsToday && data.questsDone is list
+        && data.lastActive == request.time
+        && ((data.currentActivity == 'home_idle' && data.startTime == null)
+          || (data.currentActivity != 'home_idle' && data.startTime is int
+            && data.startTime <= request.time.toMillis() + 120000));
+    }
+    function mirrored(data, role) {
+      return data.diff(getAfter(roomPath()).data.users[role]).affectedKeys()
+        .hasOnly(['waterToday', 'questsDone', 'lastActive']);
+    }
+    function validSessionChange(before, after, role) {
+      let changed = after.diff(before).affectedKeys();
+      return after.sessionVersion >= before.sessionVersion
+        && (before.lastActivityTimestamp == null || after.lastActivityTimestamp >= before.lastActivityTimestamp)
+        && (!changed.hasAny(['currentActivity', 'startTime', 'plannedEndTime',
+                            'explicitSession', 'sessionVersion', 'lastActivityTimestamp', 'sessionId'])
+          || isRole(role)
+          || (before.plannedEndTime is int
+            && before.plannedEndTime <= request.time.toMillis() + 120000
+            && after.currentActivity == 'home_idle' && after.startTime == null
+            && after.lastActivityTimestamp == before.plannedEndTime
+            && after.sessionVersion == before.sessionVersion + 1));
+    }
+    function historyPreserved(before, after, liveDate) {
+      let changes = after.diff(before);
+      return changes.removedKeys().size() == 0 && changes.changedKeys().hasOnly([liveDate]);
+    }
+    function validRoom(data) {
+      return isRole(data.actor) && data.revision is int && data.revision > 0
+        && data.clientEvaluatedAt is timestamp && data.clientEvaluatedAt <= request.time + duration.value(2, 'm')
+        && data.updatedAt == request.time && data.plant is map
+        && data.currentStage is int && data.currentStage >= 1 && data.currentStage <= 5
+        && data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 21
+        && data.targetWater in [40, 55, 70, 85, 100]
+        && data.messages is list && data.messages.size() <= 160
+        && getAfter(ppaPath()).data.diff(data.users.ppa).affectedKeys().hasOnly(['waterToday', 'questsDone', 'lastActive'])
+        && getAfter(tbvPath()).data.diff(data.users.tbv).affectedKeys().hasOnly(['waterToday', 'questsDone', 'lastActive']);
+    }
+
+    match /pocket_space/access {
+      allow get: if member();
+    }
+    match /pocket_space/plant_state {
+      allow get: if member();
+      allow create: if validRoom(request.resource.data) && request.resource.data.revision == 1;
+      allow update: if validRoom(request.resource.data)
+        && request.resource.data.revision == resource.data.revision + 1
+        && historyPreserved(resource.data.plant.waterHistoryByDate,
+          request.resource.data.plant.waterHistoryByDate, resource.data.plant.date)
+        && historyPreserved(resource.data.plant.historyStatusByDate,
+          request.resource.data.plant.historyStatusByDate, resource.data.plant.date);
+    }
+    match /pocket_space/{profile} {
+      function role() { return profile == 'user_ppa' ? 'ppa' : 'tbv'; }
+      function known() { return profile in ['user_ppa', 'user_tbv']; }
+      allow get: if known() && member();
+      allow create: if known() && member() && validProfile(request.resource.data, role())
+        && request.resource.data.currentActivity == 'home_idle' && mirrored(request.resource.data, role());
+      allow update: if known() && member() && validProfile(request.resource.data, role())
+        && mirrored(request.resource.data, role()) && validSessionChange(resource.data, request.resource.data, role());
+    }
+    match /pocket_space/live_interactions/events/{interaction} {
+      allow read: if member();
+      allow create: if isRole(request.resource.data.from)
+        && request.resource.data.id == interaction
+        && request.resource.data.to in ['ppa', 'tbv']
+        && request.resource.data.to != request.resource.data.from
+        && request.resource.data.type in ['heart', 'kiss', 'punch', 'message', 'quest_request']
+        && request.resource.data.content is string && request.resource.data.content.size() <= 500
+        && request.resource.data.updatedAt == request.time
+        && sameRoomWrite(request.resource.data.roomRevision)
+        && (request.resource.data.type != 'quest_request' || request.resource.data.questStatus == 'pending');
+      allow update: if isRole(resource.data.to) && resource.data.type == 'quest_request'
+        && resource.data.questStatus == 'pending'
+        && request.resource.data.questStatus in ['confirmed', 'declined']
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['questStatus', 'questRespondedAt', 'respondedAt', 'roomRevision', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && sameRoomWrite(request.resource.data.roomRevision);
+    }
+    match /activity_logs/{log} {
+      allow read: if member();
+      allow create: if member() && request.resource.data.id == log
+        && request.resource.data.user in ['ppa', 'tbv']
+        && request.resource.data.dateStr.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.startTimestamp is int && request.resource.data.endTimestamp is int
+        && request.resource.data.endTimestamp >= request.resource.data.startTimestamp
+        && request.resource.data.endTimestamp <= request.time.toMillis() + 120000
+        && sameRoomWrite(request.resource.data.roomRevision);
+    }
+  }
+}

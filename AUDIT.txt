@@ -1,0 +1,77 @@
+POCKET SPACE — RÀ SOÁT VÀ HƯỚNG DẪN CHẠY
+
+Các ghi chú dưới đây mô tả bản trước khi chuyển sang Firestore.
+Thiết lập và cách chạy bản hiện tại có trong FIREBASE-SETUP.md.
+
+Chạy trên máy
+-------------
+Giải nén dự án, mở Terminal trong thư mục pocket-space và chạy:
+
+    python -m http.server 8765 --bind 127.0.0.1
+
+Mở http://127.0.0.1:8765/ trong trình duyệt. Giữ cùng địa chỉ và cổng đã
+dùng trước đó để trình duyệt tiếp tục truy cập cùng kho IndexedDB. Dữ liệu
+tạo qua file:// hoặc qua cổng khác thuộc một vùng lưu trữ riêng.
+
+Các phát hiện và thay đổi
+------------------------
+1. Canvas chính vẫn vẽ khi mở hộp thoại. Bản mới dùng chung một bộ điều
+   phối 3 FPS và chỉ vẽ màn hình chính, bộ sưu tập bonsai hoặc lịch sử
+   tùy lớp đang hiển thị. Hộp thoại tĩnh và tab ẩn dừng lịch vẽ.
+2. Lịch sử đã dùng IntersectionObserver nhưng giữ lại bộ vẽ và các
+   canvas cắt sẵn sau khi cuộn qua. Bản mới giải phóng bộ vẽ của ô ngoài
+   màn hình. Mỗi sprite được lấy theo vùng ảnh nguồn, dùng chung bộ nhớ
+   đệm tối đa 16 sheet thay vì tạo sáu canvas cho từng ô.
+3. Đồng hồ cũ đã lấy thời lượng từ Date.now() và startTime. Bản mới bỏ
+   nhịp setInterval, dừng cập nhật hiển thị khi tab ẩn và đối chiếu lại
+   giờ cùng các khoản nước đến hạn ngay khi quay lại tab. Thời lượng
+   hiện tại được lấy từ mốc bắt đầu đã lưu.
+4. Tách thao tác IndexedDB ra khỏi luật chơi. Giao dịch ghi nhật ký,
+   nước, thưởng nhiệm vụ và tiến độ cây được giữ nguyên tính nguyên tử.
+   Tổng kết qua nửa đêm tiếp tục lưu lịch sử, đặt lại nước trong ngày và
+   áp dụng phạt -5 ngày hoặc tụt Stage theo quy tắc đã có.
+5. Tăng vùng chạm tối thiểu 44 × 44 px cho đổi hoạt động, mở/ngắt
+   hộp thoại, chăm cây, hồ sơ và nhận Side Quests. Dải chọn ngày có thể
+   xuống hai hàng trên màn hình hẹp.
+6. Tách HTML 9.544.677 byte thành khung HTML khoảng 15 KB, ba
+   stylesheet, tám module JavaScript và ảnh PNG riêng. Màn hình ban đầu
+   tải ba ảnh sprite cần thiết. Timeline, thư viện cây và Side Quests
+   tải ảnh khi mở hoặc khi ảnh xuất hiện trong vùng xem.
+
+Cấu trúc mã nguồn
+-----------------
+index.html      Khung giao diện, nạp CSS và điểm khởi chạy module.
+css/style.css   Biến màu, reset và bố cục chung.
+css/components.css  Thẻ, thanh nước, nút và các thành phần tương tác.
+css/modals.css  Hộp thoại và các lớp giao diện mở rộng.
+js/app.js       Khởi tạo, liên kết sự kiện, quản lý lớp vẽ và đồng hồ.
+js/state.js     Luật hoạt động, nước, 21 ngày và các lượt nhận thưởng.
+js/db.js        Mở kho và giao dịch với IndexedDB v5.
+js/audio.js     Âm thanh tổng hợp Web Audio.
+js/canvasRenderer.js  Vẽ sprite 3 FPS, cắt theo ô, ảnh pixel dự phòng.
+js/catalog.js   Danh mục hoạt động và đường dẫn ảnh.
+js/timeline.js  Tổng hợp phiên theo giờ và quản lý ảnh thu nhỏ.
+js/quests.js    Ngăn nhiệm vụ, thao tác nhận thưởng và phản hồi ảnh.
+assets/         50 sheet nhân vật, 10 ảnh bonsai và 11 ảnh quest.
+
+Sprite và phần thưởng
+---------------------
+Sheet Ngồi thẫn thờ của TBV gồm sáu khung 160 × 160 px. Tay trái đỡ má,
+tay phải giữ bút. Ống tay áo thừa đã được gỡ. Bản sửa có khác nhẹ một số
+chi tiết vẽ từng khung, với cửa sổ hoa anh đào, đèn, cây, cốc và dép hồng
+vẫn hiện diện. Bộ ảnh TBV còn có xe máy, dùng bữa, dọn nhà và ngủ trưa.
+
+Sheet Dùng bữa mới của PPA có sáu khung 160 × 160 px. Mèo được vẽ trong
+ảnh. Hoạt động home_eating được áp dụng cùng quy tắc cho PPA và TBV.
+Một lượt kéo dài đủ 20 phút cộng 4 giọt một lần, tách khỏi hạn mức
+nấu ăn/dọn dẹp. Lượt dùng bữa được hiển thị trong lịch sử theo giờ.
+
+Kiểm thử
+--------
+Kiểm thử tích hợp bằng Chromium với mô phỏng cùng nguồn localhost.
+Đã đối chiếu từng pixel của 12 khung từ hai sheet chính với Canvas.
+Đã đếm lượt vẽ khi mở modal, khi ẩn tab và khi cuộn hàng lịch sử ra
+ngoài tầm nhìn. Đã kiểm tra vùng chạm trên màn hình 320 px, mức thưởng
+tại 19:59 và 20:00, tải lại dữ liệu, nhiệm vụ đã nhận, lịch sử góp
+nước và xử lý thiếu nước qua ba ngày. Các kiểm tra riêng về dữ liệu
+bao gồm nâng cấp dữ liệu v4 lên v5 và ghi thưởng một lần giữa hai tab.
