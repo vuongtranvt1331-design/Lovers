@@ -100,25 +100,12 @@
 }
 .sync-banner #syncStatus { min-width: 0; overflow-wrap: anywhere; font-size: 11px; font-weight: 750; }
 .sync-banner #syncButton { flex: 0 0 auto; }
-.sync-banner:is([data-state="offline"], [data-state="error"], [data-state="unapproved"]) {
+.sync-banner:is([data-state="offline"], [data-state="error"]) {
   color: #74394A;
   border-color: #DBAAB6;
   background: #F8E8EA;
 }
 .sync-banner[data-state="online"] { color: #375D43; }
-.sync-view-hint { font-size: 11px; overflow-wrap: anywhere; }
-.sync-device { display: grid; justify-items: start; gap: 5px; min-width: 0; font-size: 11px; }
-.sync-device code {
-  max-width: 100%;
-  padding: 4px 6px;
-  border: 1px solid #DBAAB6;
-  border-radius: 6px;
-  background: #FFF8F8;
-  overflow-wrap: anywhere;
-  -webkit-user-select: all;
-  user-select: all;
-}
-#syncCopyStatus:empty { display: none; }
 
 .card {
   background: var(--card);

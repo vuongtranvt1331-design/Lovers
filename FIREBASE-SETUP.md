@@ -1,53 +1,44 @@
-# Pocket Space · thiết lập đồng bộ
+# Pocket Space · đồng bộ công khai
 
-## 1. Bật Firebase một lần
+Ứng dụng mở trực tiếp. Chọn PPA hoặc TBV ở đầu trang để dùng hồ sơ tương ứng. Ai mở trang cũng có thể đọc dữ liệu chung và thực hiện thao tác của cả hai hồ sơ. Dữ liệu hoạt động, nước và tin nhắn dùng chung qua Firestore.
 
-1. Mở dự án [lovvers-95674 trong Firebase Console](https://console.firebase.google.com/project/lovvers-95674/overview). Tạo Cloud Firestore nếu dự án chưa có.
-2. Vào **Authentication → Sign-in method**, bật **Anonymous**. Nếu dự án có tùy chọn tự xóa tài khoản ẩn danh sau 30 ngày, để tùy chọn đó tắt để mã thiết bị tiếp tục dùng được.
-3. Vào **Firestore Database → Rules**, công bố [firestore.rules](./firestore.rules). Nếu dự án có ứng dụng khác, hợp nhất phần Pocket Space vào rules hiện có trước khi công bố. Có thể chạy lệnh sau với quyền quản trị dự án:
+## 1. Cấu hình Firestore
 
-       firebase deploy --only firestore:rules --project lovvers-95674
+Dự án [lovvers-95674](https://console.firebase.google.com/project/lovvers-95674/overview) dùng [firestore.rules](./firestore.rules). Bộ quy tắc giới hạn quyền công khai vào các tài liệu Pocket Space, tương tác và nhật ký của app. Các thao tác được kiểm tra theo cấu trúc dữ liệu và ngày nước đã chốt. Firebase Authentication không cần bật cho app.
 
-## 2. Đưa mã nguồn lên Lovers
+Từ thư mục bản Git Lovers, người quản trị Firebase có thể công bố quy tắc bằng lệnh sau.
 
-Bản chuẩn bị nằm trên nhánh pocket-space-sync, dựa trên main của Lovers. Giữ nguyên bai-31.json đang có trong repo. Thực hiện từ thư mục bản Git Lovers.
+    firebase deploy --only firestore:rules --project lovvers-95674
+
+Nếu dự án có thêm ứng dụng khác, kiểm tra và hợp nhất quy tắc của các ứng dụng trước khi công bố.
+
+## 2. Đưa mã lên GitHub Pages
+
+Nhánh pocket-space-sync dựa trên main của Lovers và giữ bai-31.json hiện có. Quyền GitHub dùng để đưa mã lên repository.
 
     gh auth login --hostname github.com --git-protocol https --web
     gh auth setup-git
     git push -u origin pocket-space-sync
 
-Trên GitHub, mở pull request về main và hợp nhất. Nếu cần cấu hình nguồn Pages, vào **Settings → Pages → Deploy from a branch → main → /(root)**. Sau khi Pages triển khai, mở [Pocket Space trên Lovers](https://vuongtranvt1331-design.github.io/Lovers/).
-
-## 3. Ghép hai trình duyệt
-
-1. Mở đúng địa chỉ Pages trên trình duyệt PPA và trình duyệt TBV. Chọn **Sao chép mã thiết bị** trên mỗi trình duyệt.
-2. Trong **Firestore Database → Data**, tạo hoặc sửa document **pocket_space/access**. Thêm hai trường kiểu string:
-   - **ppa** là mã hiển thị trên trình duyệt PPA.
-   - **tbv** là mã hiển thị trên trình duyệt TBV.
-3. Trên hai trình duyệt, chọn **Kiểm tra lại**. Chọn PPA hoặc TBV ở đầu trang để đổi góc nhìn. Mỗi trình duyệt gửi hoạt động và góp nước cho hồ sơ đã được gán. Đổi một hoạt động trên máy PPA và kiểm tra máy TBV thấy cập nhật.
-4. Trình duyệt ghi nhớ mã ở lần mở sau. Nếu đổi trình duyệt hoặc xóa dữ liệu trang, dùng mã mới để thay trường tương ứng trong access.
-
-Chỉ hai mã đã gán được đọc phòng. GitHub lưu mã nguồn và ảnh. Firestore lưu hoạt động, nước, tiến độ cây và tin nhắn. Dữ liệu của bản IndexedDB cũ vẫn ở trình duyệt và địa chỉ gốc. Bản Firebase chưa nhập lịch sử cũ.
+Mở pull request về main và hợp nhất. Trong **Settings → Pages**, dùng **Deploy from a branch → main → /(root)**. Khi triển khai xong, mở [Pocket Space trên Lovers](https://vuongtranvt1331-design.github.io/Lovers/) trên hai máy. Chọn hồ sơ rồi thử đổi hoạt động ở một máy để kiểm tra máy kia thấy cập nhật.
 
 ## Chạy và kiểm thử local
 
-Mở Mo-Pocket-Space.bat hoặc chạy lệnh sau từ thư mục dự án.
+Mở Mo-Pocket-Space.bat hoặc chạy lệnh sau.
 
     python -m http.server 8765 --bind 127.0.0.1
 
-Mở http://127.0.0.1:8765/. Địa chỉ local và GitHub Pages có mã trình duyệt riêng. Ghép trình duyệt tại địa chỉ dùng lâu dài.
-
 Để thử với dữ liệu mô phỏng, chạy Firebase CLI với Java tương thích.
 
-    firebase emulators:start --only auth,firestore --project demo-pocket-space
+    firebase emulators:start --only firestore --project demo-pocket-space
 
-Mở http://127.0.0.1:8765/?emulator=1. Tạo document access trong Firestore Emulator bằng hai mã hiển thị trên hai trình duyệt. Sau đó có thể chạy các kiểm thử logic với Node.js 22+.
+Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic với Node.js 22+.
 
     node --test tests/state.test.mjs
 
-## Ghi chú dữ liệu
+## Dữ liệu
 
-- pocket_space/plant_state chứa trạng thái chung và bản sao hai hồ sơ để cập nhật trong cùng một lần nhận dữ liệu. Các giao dịch ghi cập nhật đồng thời document người dùng và bản trạng thái chung.
-- pocket_space/live_interactions/events lưu tương tác. Khi đối phương chấp nhận nhiệm vụ đôi, hai hồ sơ nhận thưởng trong cùng một giao dịch.
-- activity_logs được tra theo dateStr. Phiên qua nửa đêm được chia theo 00:00 giờ Việt Nam. Phiên bản và số bản ghi của ngày đảm bảo lịch sử khớp với trạng thái người dùng.
-- Firestore giữ dữ liệu đã đọc khi mất mạng. Các thao tác thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Khi cả hai máy đều đóng trang, app chốt phiên đến hạn và ngày cũ ở lần kết nối sau.
+- pocket_space/plant_state chứa trạng thái chung và bản sao hai hồ sơ để đồng bộ trong cùng một snapshot.
+- pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
+- pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
+- Firestore giữ dữ liệu đã đọc khi mất mạng. Thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Lịch sử IndexedDB của bản cũ vẫn ở trình duyệt gốc.

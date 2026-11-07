@@ -47,7 +47,7 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
     }
     ui.questCount.textContent = count + "/" + questCards.length;
     ui.questProfile.textContent = "Nhiệm vụ của " + user.toUpperCase()
-      + (canAct() ? " · nhiệm vụ đôi cần cả hai xác nhận." : " · cần đăng nhập đúng hồ sơ và có kết nối để nhận thưởng.");
+      + (canAct() ? " · nhiệm vụ đôi cần cả hai xác nhận." : " · cần kết nối để nhận thưởng.");
   }
 
   async function playQuestFeedback() {

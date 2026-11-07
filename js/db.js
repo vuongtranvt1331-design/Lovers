@@ -13,11 +13,9 @@ const firebaseConfig = {
 
 const roles = ['ppa', 'tbv'];
 const subscribers = new Set();
-let feed = { status: 'connecting', approved: false, role: null, deviceId: null, raw: null, error: null };
+let feed = { status: 'connecting', raw: null, error: null };
 let initializing;
-let registeringDevice;
 let unsubscribeRoom;
-let generation = 0;
 let serverReady = false;
 let reconnectTimer;
 let reconnectDelay = 3000;
@@ -33,7 +31,7 @@ function dbError(code, message) {
 
 function isNetworkError(error) {
   return globalThis.navigator?.onLine === false
-    || ['unavailable', 'deadline-exceeded', 'firestore/unavailable', 'auth/network-request-failed'].includes(error?.code);
+    || ['unavailable', 'deadline-exceeded', 'firestore/unavailable'].includes(error?.code);
 }
 
 function retryConnection(client) {
@@ -46,27 +44,20 @@ function retryConnection(client) {
 }
 
 async function probeConnection(client) {
-  const { fs, refs, auth } = client;
+  const { fs, refs } = client;
   if (navigator.onLine === false) return;
-  if (!feed.approved || !auth.currentUser?.isAnonymous) {
-    await connectDevice(client, auth.currentUser);
-    return;
-  }
-  const token = generation;
   try {
     const snapshot = await fs.getDocFromServer(refs.room);
-    if (token !== generation) return;
     clearTimeout(reconnectTimer);
     reconnectTimer = undefined;
     reconnectDelay = 3000;
     serverReady = true;
     publish({ status: 'online', raw: rawFrom(snapshot.data()), error: null });
+    listenRoom(client);
   } catch (error) {
-    if (token !== generation) return;
     serverReady = false;
     const offline = isNetworkError(error);
-    if (error.code === 'permission-denied') markUnapproved(error);
-    else publish({ status: offline ? 'offline' : 'error', error });
+    publish({ status: offline ? 'offline' : 'error', error });
     if (offline) retryConnection(client);
   }
 }
@@ -81,37 +72,29 @@ function projectForURL() {
 function context() {
   if (initializing) return initializing;
   initializing = (async () => {
-    const [firebase, fs, authSDK] = await Promise.all([
+    const [firebase, fs] = await Promise.all([
       import(sdkRoot + 'firebase-app.js'),
       import(sdkRoot + 'firebase-firestore.js'),
-      import(sdkRoot + 'firebase-auth.js'),
     ]);
     const { emulator, config } = projectForURL();
     const app = firebase.initializeApp(config);
     const db = fs.initializeFirestore(app, {
       localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }),
     });
-    const auth = authSDK.initializeAuth(app, {
-      persistence: [authSDK.indexedDBLocalPersistence, authSDK.browserLocalPersistence],
-    });
-    if (emulator) {
-      fs.connectFirestoreEmulator(db, '127.0.0.1', 8080);
-      authSDK.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-    }
+    if (emulator) fs.connectFirestoreEmulator(db, '127.0.0.1', 8080);
     const refs = {
       room: fs.doc(db, 'pocket_space', 'plant_state'),
-      access: fs.doc(db, 'pocket_space', 'access'),
       users: Object.fromEntries(roles.map(role => [role, fs.doc(db, 'pocket_space', 'user_' + role)])),
       interactions: fs.collection(db, 'pocket_space', 'live_interactions', 'events'),
-      logs: fs.collection(db, 'activity_logs'),
+      logs: fs.collection(db, 'pocket_space', 'activity_history', 'logs'),
     };
-    const client = { fs, authSDK, auth, db, refs };
-    authSDK.onAuthStateChanged(auth, user => void connectDevice(client, user));
+    const client = { fs, db, refs };
+    listenRoom(client);
     addEventListener('offline', () => {
       clearTimeout(reconnectTimer);
       reconnectTimer = undefined;
       serverReady = false;
-      if (feed.approved || feed.status === 'connecting') publish({ status: 'offline' });
+      publish({ status: 'offline' });
     });
     addEventListener('online', () => {
       publish({ status: 'connecting', error: null });
@@ -131,85 +114,29 @@ function rawFrom(data) {
   return { users: data.users, plant: data.plant, messages: data.messages ?? [], revision: data.revision ?? 0 };
 }
 
-function markUnapproved(error) {
-  serverReady = false;
-  publish({ status: 'unapproved', approved: false, role: null, raw: null, error });
-}
-
-async function registerDevice(client) {
-  if (registeringDevice) return registeringDevice;
-  if (navigator.onLine === false) {
-    publish({ status: 'offline' });
-    return;
-  }
-  const { authSDK, auth } = client;
-  registeringDevice = (async () => {
-    if (auth.currentUser && !auth.currentUser.isAnonymous) await authSDK.signOut(auth);
-    if (!auth.currentUser) await authSDK.signInAnonymously(auth);
-  })().catch(error => {
+function listenRoom(client) {
+  if (unsubscribeRoom) return;
+  const { fs, refs } = client;
+  unsubscribeRoom = fs.onSnapshot(refs.room, { includeMetadataChanges: true }, snapshot => {
+    if (snapshot.metadata.hasPendingWrites) return;
+    serverReady = !snapshot.metadata.fromCache && navigator.onLine !== false;
+    if (serverReady) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = undefined;
+      reconnectDelay = 3000;
+    }
+    publish({ status: serverReady ? 'online' : 'offline', raw: rawFrom(snapshot.data()), error: null });
+  }, error => {
+    unsubscribeRoom = undefined;
+    serverReady = false;
     const offline = isNetworkError(error);
     publish({ status: offline ? 'offline' : 'error', error });
     if (offline) retryConnection(client);
-  }).finally(() => { registeringDevice = null; });
-  return registeringDevice;
-}
-
-async function connectDevice(client, user) {
-  const { fs, refs } = client;
-  const token = ++generation;
-  unsubscribeRoom?.();
-  unsubscribeRoom = undefined;
-  clearTimeout(reconnectTimer);
-  reconnectTimer = undefined;
-  serverReady = false;
-  const deviceId = user?.isAnonymous ? user.uid : null;
-  const changedDevice = deviceId !== feed.deviceId;
-  publish({
-    status: 'connecting', deviceId, error: null,
-    ...(changedDevice ? { approved: false, role: null, raw: null } : {}),
   });
-  if (!deviceId) return registerDevice(client);
-  try {
-    const access = (await fs.getDoc(refs.access)).data();
-    if (generation !== token) return;
-    const role = roles.find(key => access?.[key] === deviceId);
-    if (!role) {
-      markUnapproved(dbError('not-approved', 'Thiết bị chưa được cấp quyền cho Pocket Space.'));
-      return;
-    }
-    publish({ approved: true, role });
-    unsubscribeRoom = fs.onSnapshot(refs.room, { includeMetadataChanges: true }, snapshot => {
-      if (generation !== token || snapshot.metadata.hasPendingWrites) return;
-      serverReady = !snapshot.metadata.fromCache && navigator.onLine !== false;
-      if (serverReady) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = undefined;
-        reconnectDelay = 3000;
-      }
-      publish({ status: serverReady ? 'online' : 'offline', raw: rawFrom(snapshot.data()), error: null });
-    }, error => {
-      if (generation !== token) return;
-      serverReady = false;
-      const offline = isNetworkError(error);
-      if (error.code === 'permission-denied') markUnapproved(error);
-      else publish({ status: offline ? 'offline' : 'error', error });
-      if (offline) retryConnection(client);
-    });
-  } catch (error) {
-    if (generation !== token) return;
-    const offline = isNetworkError(error);
-    if (error.code === 'permission-denied') markUnapproved(error);
-    else publish({ status: offline ? 'offline' : 'error', error });
-    if (offline) retryConnection(client);
-  }
 }
 
-function requireDevice(actor, online = false) {
-  if (!feed.approved || !feed.role) throw dbError('not-approved', 'Thiết bị chưa được cấp quyền cho Pocket Space.');
-  if (actor && actor !== 'system' && actor !== feed.role) {
-    throw dbError('wrong-profile', 'Thiết bị này chỉ ghi dữ liệu cho hồ sơ đã được gán.');
-  }
-  if (online && (!serverReady || navigator.onLine === false)) {
+function requireOnline() {
+  if (!serverReady || navigator.onLine === false) {
     throw dbError('unavailable', 'Mất kết nối. Thay đổi chưa được lưu.');
   }
 }
@@ -290,12 +217,11 @@ async function runRoomTransaction({ fs, db, refs }, apply) {
 async function mutate(transform, _needsLegacyLogs, options = {}) {
   const client = await context();
   const { fs, refs } = client;
-  requireDevice(options.actor, true);
-  const activeGeneration = generation;
-  const actor = feed.role;
+  requireOnline();
+  const actor = options.actor ?? 'system';
+  if (actor !== 'system' && !roles.includes(actor)) throw dbError('invalid-argument', 'Hồ sơ không hợp lệ.');
   try {
     return await runRoomTransaction(client, async (transaction, current) => {
-      if (activeGeneration !== generation) throw dbError('cancelled', 'Kết nối thiết bị đã thay đổi.');
       let raw = rawFrom(current);
       const needsUsers = !raw;
       if (needsUsers) {
@@ -309,7 +235,6 @@ async function mutate(transform, _needsLegacyLogs, options = {}) {
           messages: current?.messages ?? [],
         };
       }
-      if (activeGeneration !== generation) throw dbError('cancelled', 'Kết nối thiết bị đã thay đổi.');
       const change = transform(raw, []);
       const { draft, logs } = change;
       if (!needsUsers && !logs.length && equal(draft.users, raw.users)
@@ -365,27 +290,22 @@ async function mutate(transform, _needsLegacyLogs, options = {}) {
       return { ...change, revision };
     });
   } catch (error) {
-    if (activeGeneration === generation && error?.code !== 'cancelled') {
-      const offline = isNetworkError(error);
-      if (offline) serverReady = false;
-      publish({ status: offline ? 'offline' : 'error', error });
-      if (offline) retryConnection(client);
-    }
+    const offline = isNetworkError(error);
+    if (offline) serverReady = false;
+    publish({ status: offline ? 'offline' : 'error', error });
+    if (offline) retryConnection(client);
     throw error;
   }
 }
 
 async function historyDay(dateStr) {
   const { fs, refs } = await context();
-  requireDevice();
-  const token = generation;
   const dayQuery = fs.query(refs.logs, fs.where('dateStr', '==', dateStr));
   async function read(useServer) {
     const [snapshot, logs] = await Promise.all([
       (useServer ? fs.getDocFromServer : fs.getDocFromCache)(refs.room),
       (useServer ? fs.getDocsFromServer : fs.getDocsFromCache)(dayQuery),
     ]);
-    if (token !== generation) throw dbError('cancelled', 'Kết nối thiết bị đã thay đổi.');
     const room = snapshot.data();
     const users = room?.users ?? null;
     const entries = logs.docs.map(item => item.data());

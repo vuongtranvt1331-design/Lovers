@@ -36,13 +36,6 @@
       <p id="syncStatus" role="status" aria-live="polite">Đang kiểm tra kết nối…</p>
       <button class="button" id="syncButton" type="button" hidden>Kiểm tra lại</button>
     </div>
-    <p class="sync-view-hint" id="syncViewHint" hidden></p>
-    <div class="sync-device" id="syncDevice" hidden>
-      <p>Gửi mã này cho người quản lý Pocket Space để duyệt thiết bị.</p>
-      <code id="syncDeviceCode" tabindex="0"></code>
-      <button class="button" id="syncCopyDevice" type="button">Sao chép mã thiết bị</button>
-      <p id="syncCopyStatus" role="status" aria-live="polite"></p>
-    </div>
   </section>
 
   <noscript><p class="script-note">Bật JavaScript để xem hoạt động và tiến độ bonsai.</p></noscript>
@@ -199,7 +192,7 @@
     <div><p class="kicker">Hồ sơ hiện tại</p><h2 id="profileHeading">Bạn là ai hôm nay?</h2></div>
     <button class="icon-button" type="button" id="profileClose" aria-label="Đóng chọn hồ sơ">×</button>
   </header>
-  <p class="small muted profile-note">Bạn có thể xem cả hai hồ sơ. Thiết bị đã duyệt chỉ được lưu thay đổi cho hồ sơ được gán.</p>
+  <p class="small muted profile-note">Chọn PPA hoặc TBV. Thay đổi sẽ được lưu cho hồ sơ đang chọn.</p>
   <div class="profile-options">
     <button type="button" class="profile-choice" id="choosePPA" aria-pressed="true">
       <svg class="avatar ppa" viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">

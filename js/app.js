@@ -21,7 +21,7 @@ const FocusUI = (() => {
     "ownPoke", "ownName", "ownActivity", "ownElapsed", "ownEffects", "timerStatus", "activityDialog", "activityClose", "dock",
     "historyButton", "historyDialog", "historyClose", "appStatus", "togetherBadge", "plant",
     "questDrawer", "questOpen", "questClose",
-    "syncBanner", "syncStatus", "syncButton", "syncViewHint", "syncDevice", "syncDeviceCode", "syncCopyDevice", "syncCopyStatus",
+    "syncBanner", "syncStatus", "syncButton",
     "coupleQuestDialog", "coupleQuestClose", "coupleQuestText", "coupleQuestAccept", "coupleQuestDecline",
   ].map(id => [id, byId(id)]));
   const names = { ppa: "PPA", tbv: "TBV" };
@@ -45,9 +45,8 @@ const FocusUI = (() => {
   const promptedQuests = new Set();
   const reportedQuests = new Set();
   let profile = "ppa";
-  let profileChosen = false;
-  let syncState = { status: "connecting", approved: false, role: null };
-  const canAct = () => syncState.status === "online" && syncState.approved === true && syncState.role === profile;
+  let connectionStatus = "connecting";
+  const canAct = () => connectionStatus === "online";
   const quests = createQuestDrawer(() => profile, commit, canAct, showCoupleQuest);
   let syncing = false;
   let lastDay = "";
@@ -60,8 +59,7 @@ const FocusUI = (() => {
   let partnerStartTime;
   let galleryObserver;
   let selectedQuest = null;
-  let priorRole = null;
-  let hydratedRole = null;
+  let hydratedRemote = false;
   let lockedScroll = null;
 
   const partner = () => profile === "ppa" ? "tbv" : "ppa";
@@ -327,17 +325,12 @@ const FocusUI = (() => {
     ownStartTime = own.startTime;
     partnerStartTime = other.startTime;
     ui.activeProfileName.textContent = names[profile];
-    ui.profileButton.setAttribute("aria-label", names[profile] + " · Đổi góc nhìn");
     ui.ownName.textContent = names[profile];
     ui.partnerName.textContent = names[partner()];
     ui.ownActivity.textContent = ACTIVITY_TITLES.get(own.currentActivity);
     ui.partnerActivity.textContent = ACTIVITY_TITLES.get(other.currentActivity);
     ui.choosePPA.setAttribute("aria-pressed", String(profile === "ppa"));
     ui.chooseTBV.setAttribute("aria-pressed", String(profile === "tbv"));
-    const boundRole = syncState.approved ? syncState.role : null;
-    ui.syncViewHint.hidden = !boundRole || boundRole === profile;
-    ui.syncViewHint.textContent = ui.syncViewHint.hidden ? ""
-      : "Đang xem " + names[profile] + ". Chọn " + names[boundRole] + " để lưu thay đổi.";
     ui.messageInput.setAttribute("aria-label", "Tin nhắn gửi " + names[partner()]);
     const recent = latestMessage(messages, profile);
     ui.speechBubble.hidden = !recent;
@@ -398,7 +391,7 @@ const FocusUI = (() => {
   }
 
   async function refresh() {
-    if (syncing || syncState.status !== "online" || !syncState.approved || !syncState.role) return;
+    if (syncing || !canAct()) return;
     syncing = true;
     try {
       const updated = await FocusState.refresh();
@@ -431,10 +424,7 @@ const FocusUI = (() => {
   async function commit(action) {
     const dialog = dialogs.findLast(item => item.open);
     if (!canAct()) {
-      showActionStatus(syncState.approved && syncState.role && syncState.role !== profile
-        ? "Chuyển về hồ sơ " + names[syncState.role] + " để thực hiện thao tác."
-        : syncState.status === "unapproved" ? "Thiết bị đang chờ duyệt. Lấy mã thiết bị ở đầu trang."
-          : "Cần kết nối để lưu thay đổi. Hãy kiểm tra trạng thái ở đầu trang.", dialog);
+      showActionStatus("Cần kết nối để lưu thay đổi. Hãy kiểm tra trạng thái ở đầu trang.", dialog);
       return false;
     }
     try {
@@ -492,7 +482,6 @@ const FocusUI = (() => {
 
   function switchProfile(user) {
     profile = user;
-    profileChosen = true;
     try { sessionStorage.setItem("pocket-focus-profile", user); } catch {}
     ui.profileDialog.close();
     render();
@@ -532,80 +521,45 @@ const FocusUI = (() => {
     }
   }
 
-  function syncConnection(update) {
-    const previousStatus = syncState.status;
-    syncState = update;
-    const { status, approved, role, deviceId, raw, error } = update;
-    const bound = approved && role ? names[role] : "";
+  function syncConnection({ status, raw, error }) {
+    const previousStatus = connectionStatus;
+    connectionStatus = status;
     ui.syncBanner.dataset.state = status;
     ui.syncStatus.textContent = error?.code === "clock-range" ? error.message : ({
       connecting: "Đang kiểm tra kết nối…",
-      unapproved: "Thiết bị này đang chờ duyệt",
-      online: bound ? "Đã kết nối · quyền thao tác " + bound : "Đã kết nối",
-      offline: bound ? "Kết nối gián đoạn · thiết bị " + bound + " · chỉ xem" : "Kết nối gián đoạn · thử lại khi có mạng",
+      online: "Đã kết nối · thay đổi được đồng bộ",
+      offline: "Kết nối gián đoạn · chưa thể lưu thay đổi",
       error: "Chưa thể đồng bộ · hãy kiểm tra lại kết nối",
     }[status] ?? "Chưa thể đồng bộ");
-    const showDevice = status === "unapproved" && !approved && Boolean(deviceId);
-    if (!showDevice || ui.syncDeviceCode.textContent !== deviceId) ui.syncCopyStatus.textContent = "";
-    ui.syncDevice.hidden = !showDevice;
-    ui.syncDeviceCode.textContent = showDevice ? deviceId : "";
-    ui.syncButton.hidden = !["unapproved", "offline", "error"].includes(status);
-    if (status === "unapproved" && !approved && priorRole) {
-      FocusState.clearRemote();
-      Timeline.close();
-      seenMessages.clear();
-      promptedQuests.clear();
-      reportedQuests.clear();
-      hydratedRole = null;
-      priorRole = null;
-      hideWiltToast();
-      if (ui.coupleQuestDialog.open) ui.coupleQuestDialog.close();
-    }
-    if (approved && role && role !== priorRole) {
-      if (!profileChosen) profile = role;
-      priorRole = role;
-    }
-    const adopted = approved && raw ? FocusState.applyRemote(raw) : false;
-    if (approved && role && role !== hydratedRole && raw) {
-      hydratedRole = role;
+    ui.syncButton.hidden = status !== "offline" && status !== "error";
+    const adopted = raw ? FocusState.applyRemote(raw) : false;
+    if (!hydratedRemote && raw) {
+      hydratedRemote = true;
       const messages = raw.messages ?? [];
       for (const user of Object.keys(names)) seenMessages.set(user, latestMessage(messages, user)?.id);
       for (const message of messages) {
-        if (message.questStatus === "confirmed") reportedQuests.add(message.id);
+        if (message.questStatus === "confirmed") {
+          reportedQuests.add(message.id + ":" + message.from);
+          reportedQuests.add(message.id + ":" + message.to);
+        }
       }
     }
     if (status === "online") ui.appStatus.textContent = "";
     render();
     if (adopted) void Timeline.refresh();
-    if (approved && role && status === "online" && (!raw || previousStatus !== "online"
+    if (status === "online" && (!raw || previousStatus !== "online"
       || FocusState.nextRefreshAt() <= Date.now())) void refresh();
-  }
-
-  async function copyDeviceCode() {
-    if (ui.syncDevice.hidden || !syncState.deviceId) return;
-    try {
-      await navigator.clipboard.writeText(syncState.deviceId);
-      ui.syncCopyStatus.textContent = "Đã sao chép mã thiết bị.";
-    } catch {
-      ui.syncDeviceCode.focus({ preventScroll: true });
-      const selection = window.getSelection();
-      if (selection) {
-        const range = document.createRange();
-        range.selectNodeContents(ui.syncDeviceCode);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      }
-      ui.syncCopyStatus.textContent = "Hãy sao chép mã đã chọn ở trên.";
-    }
   }
 
   function showNewQuestRewards() {
     if (!canAct()) return;
     const { messages, plant } = FocusState.data;
     for (const message of messages) {
+      const key = message.id + ":" + profile;
       if (message.kind !== "quest_request" || message.questDate !== plant.date
-        || message.questStatus !== "confirmed" || reportedQuests.has(message.id)) continue;
-      reportedQuests.add(message.id);
+        || message.questStatus !== "confirmed" || reportedQuests.has(key)
+        || (message.from !== profile && message.to !== profile)) continue;
+      reportedQuests.add(key);
       quests.reward(message.questId, profile);
     }
   }
@@ -705,10 +659,7 @@ const FocusUI = (() => {
   async function mount() {
     try {
       const chosen = sessionStorage.getItem("pocket-focus-profile");
-      if (chosen === "ppa" || chosen === "tbv") {
-        profile = chosen;
-        profileChosen = true;
-      }
+      if (chosen === "ppa" || chosen === "tbv") profile = chosen;
     } catch {}
     lastDay = FocusState.today();
     buildDock();
@@ -759,7 +710,6 @@ const FocusUI = (() => {
         ui.syncButton.disabled = false;
       }
     });
-    ui.syncCopyDevice.addEventListener("click", copyDeviceCode);
     ui.coupleQuestClose.addEventListener("click", () => ui.coupleQuestDialog.close());
     ui.coupleQuestAccept.addEventListener("click", () => void answerCoupleQuest(true));
     ui.coupleQuestDecline.addEventListener("click", () => void answerCoupleQuest(false));
