@@ -338,10 +338,9 @@ const FocusUI = (() => {
 
     displayArt("own", profile, profile + "_" + own.currentActivity, 3, 2);
     displayArt("partner", partner(), partner() + "_" + other.currentActivity, 3, 2);
-    const group = activity => activity === "home_studying" ? "study"
-      : ["work_locked_in", "home_desk_work"].includes(activity) ? "focus" : null;
+    const group = FocusState.pairGroup(own.currentActivity);
     const matched = own.explicitSession && other.explicitSession
-      && Boolean(group(own.currentActivity)) && group(own.currentActivity) === group(other.currentActivity);
+      && group !== null && group === FocusState.pairGroup(other.currentActivity);
     if (ui.togetherBadge) ui.togetherBadge.hidden = !matched;
     document.body.dataset.together = String(Boolean(matched));
     if (matched && !together) {

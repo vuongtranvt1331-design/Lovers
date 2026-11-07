@@ -25,7 +25,7 @@ export const FocusState = (() => {
   };
   const REWARD_CATEGORY = {
     home_sleeping: 'sleep', home_studying: 'study',
-    home_desk_work: 'focus', work_locked_in: 'focus', office_focus_typing: 'focus',
+    home_desk_work: 'focus', work_locked_in: 'focus', work_teaching: 'focus', office_focus_typing: 'focus',
     out_running: 'sport', out_gym: 'sport', home_cooking: 'chores', home_chores: 'chores',
     home_eating: 'meal',
   };
@@ -604,6 +604,7 @@ export const FocusState = (() => {
       const rule = ruleFor(model?.users[userKey(value)]?.currentActivity);
       return rule?.minutes ? rule.minutes * MINUTE : null;
     },
+    pairGroup(activity) { return ruleFor(activity)?.pairGroup ?? null; },
 
     rewardInfo(value, now = Date.now()) {
       const user = model?.users[userKey(value)];

@@ -8,7 +8,7 @@ export const ACTIVITY_GROUPS = [
     ["home_nap", "Chợp mắt", "☽"],
   ]],
   ["Chỗ làm", [
-    ["work_locked_in", "Tập trung", "✦"], ["work_meeting", "Họp", "▥"],
+    ["work_locked_in", "Tập trung", "✦"], ["work_teaching", "Dạy học", "📚"], ["work_meeting", "Họp", "▥"],
     ["work_bored_staring", "Ngồi thẫn thờ", "·"], ["work_fake_working", "Lén xem điện thoại", "▣"],
     ["work_coffee_escape", "Nghỉ uống cà phê", "♨"], ["work_counting_down", "Đợi tan làm", "◷"],
   ]],
