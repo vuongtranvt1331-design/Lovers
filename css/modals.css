@@ -53,6 +53,7 @@ dialog[open] { animation: arrive 170ms ease-out both; }
 .couple-quest-actions { flex-wrap: wrap; margin-top: 10px; }
 .couple-quest-actions .button { flex: 1 1 92px; }
 .profile-note { margin-bottom: 8px; }
+.profile-reconnect { width: 100%; margin-top: 8px; }
 .profile-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .profile-choice {
   display: grid;

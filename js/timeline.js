@@ -1,7 +1,7 @@
 import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js";
 import { CanvasRenderer } from "./canvasRenderer.js";
 import { FocusState } from "./state.js";
-import { dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
+import { DAY_MS, dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
 
 export const Timeline = (() => {
   const byId = id => document.getElementById(id);
@@ -266,8 +266,10 @@ export const Timeline = (() => {
     for (const user of users) {
       const current = snapshot[user];
       if (current?.startTime != null) {
-        const plannedEnd = current.plannedEndTime ?? current.startTime + 24 * 60 * minuteMs;
-        add(user, current.currentActivity, current.startTime, Math.min(now, plannedEnd), false);
+        const plannedEnd = current.plannedEndTime ?? current.startTime + DAY_MS;
+        add(user, current.currentActivity, current.startTime, plannedEnd, false);
+      } else if (current?.idleStartedAt != null) {
+        add(user, current.currentActivity, Math.max(current.idleStartedAt, now - DAY_MS), now, false);
       }
     }
     return result;

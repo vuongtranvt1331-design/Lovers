@@ -13,13 +13,13 @@
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <div class="shell">
-  <header class="top line between">
+  <header class="top line between" id="topBar" data-connection="connecting">
     <div class="top-title">
       <h1>Pocket Space</h1>
       <p class="kicker">Focus &amp; Together</p>
       <p class="date-line small muted" id="appDate">Hôm nay</p>
     </div>
-    <button type="button" class="streak-badge" id="streakBadge" aria-controls="plant" aria-describedby="streakShortcutLabel" title="Đến khu vườn bonsai">
+    <button type="button" class="streak-badge" id="streakBadge" aria-controls="plant" aria-describedby="streakShortcutLabel syncStatus" title="Đến khu vườn bonsai">
       <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 5h2v8H5zM0 2h4v2h1v3H2V5H0zm8 0h1V0h3v3h-1v2H9v2H7V4h1z"></path></svg>
       <span class="mono" id="streakBadgeText">0/21 ngày</span>
       <span class="sr-only" id="streakShortcutLabel">Đến khu vườn bonsai</span>
@@ -29,25 +29,22 @@
       <span id="activeProfileName">PPA</span>
       <span class="sr-only" id="profileActionLabel">Đổi hồ sơ</span>
     </button>
+    <p class="sr-only" id="syncStatus" role="status">Đang kiểm tra kết nối…</p>
   </header>
-
-  <section class="sync-banner" id="syncBanner" data-state="connecting" aria-label="Đồng bộ giữa hai máy">
-    <div class="sync-banner-row">
-      <p id="syncStatus" role="status" aria-live="polite">Đang kiểm tra kết nối…</p>
-      <button class="button" id="syncButton" type="button" hidden>Kiểm tra lại</button>
-    </div>
-  </section>
 
   <noscript><p class="script-note">Bật JavaScript để xem hoạt động và tiến độ bonsai.</p></noscript>
 
   <main class="stack" id="main">
+    <div class="together-status line between" id="togetherStatus" hidden>
+      <span class="line"><span class="pixel-heart" aria-hidden="true"></span><strong>Cùng nhịp</strong></span>
+      <span class="mono" id="togetherElapsed" role="timer">0 giây</span>
+    </div>
     <div class="actor-pair">
     <section class="card actor-card" aria-labelledby="partnerName">
-      <div class="actor-top line between">
+      <div class="actor-top">
         <div class="actor-id">
           <p class="kicker pink">Đối phương</p>
           <h2 class="card-title" id="partnerName">TBV</h2>
-          <span class="together-badge" id="togetherBadge" hidden><span class="pixel-heart" aria-hidden="true"></span> Cùng nhịp</span>
         </div>
         <div class="actor-readout">
           <p id="partnerActivity" class="actor-activity">Nghỉ ngơi</p>
@@ -64,20 +61,20 @@
     </section>
 
     <section class="card actor-card" aria-labelledby="ownName">
-      <div class="actor-top line between">
+      <div class="actor-top">
         <div class="actor-id"><p class="kicker green">Bạn</p><h2 class="card-title" id="ownName">PPA</h2></div>
         <div class="actor-readout">
           <p id="ownActivity" class="actor-activity">Nghỉ ngơi</p>
           <p id="ownElapsed" class="actor-elapsed mono">—</p>
         </div>
       </div>
+      <p id="timerStatus" class="small muted">Duy trì hoạt động để tự động góp nước.</p>
       <div class="actor-scene">
         <button class="actor-poke" id="ownPoke" type="button" aria-haspopup="dialog" aria-label="Đổi hoạt động của bạn">
           <canvas id="ownCanvas" width="160" height="160" aria-hidden="true"></canvas>
         </button>
         <div class="actor-effects" id="ownEffects" aria-hidden="true"></div>
       </div>
-      <p id="timerStatus" class="small muted">Duy trì hoạt động để tự động góp nước.</p>
     </section>
     </div>
 
@@ -218,6 +215,7 @@
       <span>TBV</span>
     </button>
   </div>
+  <button class="button profile-reconnect" id="syncButton" type="button" hidden>Kiểm tra lại kết nối</button>
 </dialog>
 
 <dialog id="plantGallery" aria-labelledby="plantGalleryHeading">

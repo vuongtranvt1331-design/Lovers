@@ -42,6 +42,24 @@ test('fresh profiles are idle and legacy default clocks do not earn passive rewa
   assert.equal(logs.length, 0);
 });
 
+test('rest clocks survive reload and log their own time across midnight without water', async () => {
+  await FocusState.open(midnight - 10 * MINUTE);
+  await FocusState.changeActivity('ppa', 'home_gaming', midnight - 5 * MINUTE);
+  await FocusState.changeActivity('ppa', 'home_idle', midnight - MINUTE);
+
+  FocusState.clearRemote();
+  await FocusState.open(midnight + MINUTE);
+  assert.equal(FocusState.elapsedMs('ppa', midnight + MINUTE), 2 * MINUTE);
+  assert.equal(FocusState.elapsedMs('tbv', midnight + MINUTE), 11 * MINUTE);
+
+  await FocusState.changeActivity('ppa', 'home_gaming', midnight + MINUTE);
+  const rest = logs.filter(entry => entry.user === 'ppa' && entry.activity === 'home_idle');
+  assert.deepEqual(rest.map(entry => [entry.dateStr, entry.durationMinutes]), [
+    [day, 5], [day, 1], [nextDay(day), 1],
+  ]);
+  assert.equal(FocusState.data.plant.dropsToday, 0);
+});
+
 test('an explicit meal from 23:50 to 00:10 closes once and credits the new day', async () => {
   await FocusState.open(midnight - 10 * MINUTE);
   await FocusState.changeActivity('ppa', 'home_eating', midnight - 10 * MINUTE, 1);

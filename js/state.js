@@ -62,6 +62,8 @@ export const FocusState = (() => {
       && hasActivity(raw.currentActivity) && raw.currentActivity !== IDLE;
     const currentActivity = explicitSession ? raw.currentActivity : IDLE;
     const startTime = explicitSession ? savedStart : null;
+    const idleStartedAt = raw?.currentActivity === IDLE
+      ? timestamp(raw.idleStartedAt) ?? timestamp(raw.lastActivityTimestamp) : null;
     const rule = ruleFor(currentActivity);
     const plannedEndTime = explicitSession && !rule?.wakeOnly
       ? startTime + (rule?.minutes ? rule.minutes * MINUTE : DAY_MS) : null;
@@ -70,6 +72,7 @@ export const FocusState = (() => {
       user: key,
       currentActivity,
       startTime,
+      idleStartedAt,
       plannedEndTime,
       explicitSession,
       sessionVersion: Math.max(1, bounded(raw?.sessionVersion, 1)),
@@ -314,6 +317,7 @@ export const FocusState = (() => {
     Object.assign(user, {
       currentActivity: activity,
       startTime: explicitSession ? instant : null,
+      idleStartedAt: explicitSession ? null : instant,
       plannedEndTime: explicitSession && !rule?.wakeOnly
         ? instant + (rule?.minutes ? rule.minutes * MINUTE : DAY_MS) : null,
       explicitSession,
@@ -327,10 +331,12 @@ export const FocusState = (() => {
   }
 
   function closeActivity(user, instant, logs) {
-    const end = Math.min(instant, user.startTime + DAY_MS);
-    if (end > user.startTime) {
-      logs.push(logInterval(user.id, user.currentActivity, user.startTime, end,
-        (end - user.startTime) / MINUTE, 'activity'));
+    // Keep recent rest history within one day even if the live clock runs longer.
+    const start = user.startTime ?? Math.max(user.idleStartedAt ?? instant, instant - DAY_MS);
+    const end = Math.min(instant, start + DAY_MS);
+    if (end > start) {
+      logs.push(logInterval(user.id, user.currentActivity, start, end,
+        (end - start) / MINUTE, 'activity'));
     }
   }
 
@@ -376,6 +382,9 @@ export const FocusState = (() => {
     }
     if (day < draft.plant.date || (guard && !guard(draft))) {
       return { draft, logs, result: false };
+    }
+    for (const user of Object.values(draft.users)) {
+      if (user.currentActivity === IDLE) user.idleStartedAt ??= now;
     }
     settle(draft, now, logs);
     const result = operation ? operation(draft, logs) : undefined;
@@ -561,10 +570,8 @@ export const FocusState = (() => {
         if (user.currentActivity === activity) return false;
         // A slight device-clock skew must not replay an interval the other profile has already settled.
         freezePairing(draft, transitionTime);
-        if (user.explicitSession) {
-          creditSleep(draft, user, transitionTime, logs);
-          closeActivity(user, transitionTime, logs);
-        }
+        creditSleep(draft, user, transitionTime, logs);
+        closeActivity(user, transitionTime, logs);
         setActivity(user, activity, transitionTime);
         return true;
       }, {
@@ -597,6 +604,7 @@ export const FocusState = (() => {
 
     elapsedMs(value, now = Date.now()) {
       const user = model?.users[userKey(value)];
+      if (user?.idleStartedAt != null) return Math.max(0, time(now) - user.idleStartedAt);
       return user?.startTime != null ? Math.min(DAY_MS, Math.max(0,
         Math.min(time(now), user.plannedEndTime ?? Infinity) - user.startTime)) : 0;
     },

@@ -19,9 +19,9 @@ const FocusUI = (() => {
     "waterHistory", "partnerCanvas", "partnerPoke", "partnerName", "partnerActivity", "partnerElapsed", "speechBubble", "partnerEffects",
     "partnerDialog", "partnerClose", "messageForm", "messageInput", "quickActions", "ownCanvas",
     "ownPoke", "ownName", "ownActivity", "ownElapsed", "ownEffects", "timerStatus", "activityDialog", "activityClose", "dock",
-    "historyButton", "historyDialog", "historyClose", "appStatus", "togetherBadge", "plant",
+    "historyButton", "historyDialog", "historyClose", "appStatus", "togetherStatus", "togetherElapsed", "plant",
     "questDrawer", "questOpen", "questClose",
-    "syncBanner", "syncStatus", "syncButton",
+    "topBar", "syncStatus", "syncButton",
     "coupleQuestDialog", "coupleQuestClose", "coupleQuestText", "coupleQuestAccept", "coupleQuestDecline",
   ].map(id => [id, byId(id)]));
   const names = { ppa: "PPA", tbv: "TBV" };
@@ -50,7 +50,8 @@ const FocusUI = (() => {
   const quests = createQuestDrawer(() => profile, commit, canAct, showCoupleQuest);
   let syncing = false;
   let lastDay = "";
-  let together = false;
+  let together = null;
+  let togetherWindow = null;
   let wiltToastDay = "";
   let wiltToastTimer;
   let clockTimer;
@@ -113,6 +114,17 @@ const FocusUI = (() => {
   function renderClocks(now = Date.now()) {
     ui.ownElapsed.textContent = ownStartTime == null ? "—" : elapsed(FocusState.elapsedMs(profile, now), true);
     ui.partnerElapsed.textContent = partnerStartTime == null ? "—" : elapsed(FocusState.elapsedMs(partner(), now), true);
+    const matched = togetherWindow !== null && now >= togetherWindow.start && now < togetherWindow.end;
+    if (matched) ui.togetherElapsed.textContent = elapsed(now - togetherWindow.start, true);
+    if (matched !== together) {
+      together = matched;
+      ui.togetherStatus.hidden = !matched;
+      document.body.dataset.together = String(matched);
+      if (matched) {
+        renderers.own.restart(AnimationManager.tick);
+        renderers.partner.restart(AnimationManager.tick);
+      }
+    }
   }
 
   function renderPlant() {
@@ -322,8 +334,8 @@ const FocusUI = (() => {
     const { users, messages } = FocusState.data;
     const own = users[profile];
     const other = users[partner()];
-    ownStartTime = own.startTime;
-    partnerStartTime = other.startTime;
+    ownStartTime = own.startTime ?? own.idleStartedAt;
+    partnerStartTime = other.startTime ?? other.idleStartedAt;
     ui.activeProfileName.textContent = names[profile];
     ui.ownName.textContent = names[profile];
     ui.partnerName.textContent = names[partner()];
@@ -339,15 +351,12 @@ const FocusUI = (() => {
     displayArt("own", profile, profile + "_" + own.currentActivity, 3, 2);
     displayArt("partner", partner(), partner() + "_" + other.currentActivity, 3, 2);
     const group = FocusState.pairGroup(own.currentActivity);
-    const matched = own.explicitSession && other.explicitSession
+    const sharedGroup = own.explicitSession && other.explicitSession
       && group !== null && group === FocusState.pairGroup(other.currentActivity);
-    if (ui.togetherBadge) ui.togetherBadge.hidden = !matched;
-    document.body.dataset.together = String(Boolean(matched));
-    if (matched && !together) {
-      renderers.own.restart(AnimationManager.tick);
-      renderers.partner.restart(AnimationManager.tick);
-    }
-    together = matched;
+    togetherWindow = sharedGroup ? {
+      start: Math.max(own.startTime, other.startTime),
+      end: Math.min(own.plannedEndTime ?? Infinity, other.plannedEndTime ?? Infinity),
+    } : null;
     if (recent && seenMessages.get(profile) !== recent.id) {
       seenMessages.set(profile, recent.id);
       if (quick[recent.kind]) playNudge("own", recent.kind);
@@ -523,13 +532,14 @@ const FocusUI = (() => {
   function syncConnection({ status, raw, error }) {
     const previousStatus = connectionStatus;
     connectionStatus = status;
-    ui.syncBanner.dataset.state = status;
-    ui.syncStatus.textContent = error?.code === "clock-range" ? error.message : ({
+    ui.topBar.dataset.connection = status;
+    const connectionLabel = error?.code === "clock-range" ? error.message : ({
       connecting: "Đang kiểm tra kết nối…",
       online: "Đã kết nối · thay đổi được đồng bộ",
       offline: "Kết nối gián đoạn · chưa thể lưu thay đổi",
       error: "Chưa thể đồng bộ · hãy kiểm tra lại kết nối",
     }[status] ?? "Chưa thể đồng bộ");
+    if (ui.syncStatus.textContent !== connectionLabel) ui.syncStatus.textContent = connectionLabel;
     ui.syncButton.hidden = status !== "offline" && status !== "error";
     const adopted = raw ? FocusState.applyRemote(raw) : false;
     if (!hydratedRemote && raw) {
