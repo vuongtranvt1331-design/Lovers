@@ -1,9 +1,13 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS } from "./catalog.js?v=quest-progress";
+import {
+  ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS,
+  STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO,
+  DAILY_WATER_MAX_PER_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
+} from "./catalog.js?v=bonsai-balance";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=quest-progress";
-import { FocusState } from "./state.js?v=quest-progress";
-import { Timeline } from "./timeline.js?v=quest-progress";
-import { createQuestDrawer } from "./quests.js?v=quest-progress";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=bonsai-balance";
+import { FocusState } from "./state.js?v=bonsai-balance";
+import { Timeline } from "./timeline.js?v=bonsai-balance";
+import { createQuestDrawer } from "./quests.js?v=bonsai-balance";
 import { PocketDB } from "./db.js";
 import { offsetDay } from "./gameTime.js";
 
@@ -14,6 +18,7 @@ const FocusUI = (() => {
     "chooseTBV", "plantCanvas", "plantPoke", "plantStage", "plantStatus", "partnerWater",
     "ownWater", "waterTotal", "waterTarget", "waterPartnerBar", "waterOwnBar", "rulesDialog", "rulesClose",
     "plantHelp", "plantGalleryOpen", "plantGallery", "plantGalleryClose", "plantGalleryGrid", "rulesStreak", "galleryStreak",
+    "ruleSleep", "ruleStudy", "ruleFocus", "ruleSport", "ruleChores", "ruleStageGrowth", "ruleStageMaintenance",
     "plantAvailable", "plantWaterDialog", "plantWaterClose", "plantWaterDescription", "plantWaterConfirm",
     "plantPPACanvas", "plantTBVCanvas", "plantWaterHeart",
     "streakText", "streakDots", "streakHint", "streakBadge", "streakBadgeText",
@@ -28,7 +33,6 @@ const FocusUI = (() => {
   ].map(id => [id, byId(id)]));
   const names = { ppa: "PPA", tbv: "TBV" };
   const plantNames = ["Mầm hạt", "Chồi non", "Bonsai mini", "Đơm hoa", "Cổ thụ"];
-  const plantTargets = [40, 55, 70, 85, 100];
   const streakGoal = 21;
   const quick = { heart: "❤️ Gửi bạn một trái tim", kiss: "💋 Mwah!", bonk: "🥊 Bonk!" };
   const localDate = new Intl.DateTimeFormat("vi-VN", {
@@ -162,7 +166,7 @@ const FocusUI = (() => {
     displayArt("plant", "plant", key, dry ? 1 : 5, 1);
     renderPlantWaterers(currentDay ? plant.date : null, users);
     renderWaterControls(currentDay ? users[profile].waterDropsAvailable ?? 0 : 0, currentDay);
-    renderStreak(plant, total);
+    renderStreak(plant, total, currentDay);
     if (currentDay) showWiltToastIfNeeded(plant);
   }
 
@@ -221,35 +225,46 @@ const FocusUI = (() => {
     }
   }
 
-  function renderStreak(plant, total) {
+  function stageTarget(index, growthDays) {
+    return STAGE_TARGETS[index] + STAGE_DAILY_INCREASES[index] * growthDays;
+  }
+
+  function renderStreak(plant, total, currentDay = plant.date === FocusState.today()) {
     const settled = plant.streakDays;
-    const todayMet = total >= plant.targetDrops;
+    const todayMet = currentDay && total >= plant.targetDrops;
     const days = Math.min(streakGoal, settled + Number(todayMet));
     const stage = plant.currentStage;
+    const finalStage = stage === plantNames.length;
     const label = "Tiến trình " + days + " / " + streakGoal + " ngày";
     ui.streakText.textContent = label;
     ui.streakBadgeText.textContent = days + "/" + streakGoal + " ngày";
-    if (days === streakGoal && todayMet && stage < plantNames.length) {
-      ui.streakHint.textContent = "Đủ ngày thứ 21 · lên Giai đoạn " + (stage + 1) + " lúc 00:00.";
-    } else if (todayMet && settled < streakGoal) {
-      ui.streakHint.textContent = "Đủ nước hôm nay · chốt ngày lúc 00:00.";
+    if (days === streakGoal && todayMet && !finalStage) {
+      ui.streakHint.textContent = "Đủ ngày thứ 21 · 00:00 lên Giai đoạn " + (stage + 1)
+        + " với mốc " + STAGE_TARGETS[stage] + " giọt.";
+    } else if (todayMet) {
+      const growthDays = Math.min(STAGE_GROWTH_DAY_CAP, (plant.stageGrowthDays ?? 0) + 1);
+      const tomorrow = stageTarget(stage - 1, growthDays);
+      ui.streakHint.textContent = "Đủ nước hôm nay · mốc ngày mai " + tomorrow + " giọt từ 00:00.";
     } else if (plant.shieldAvailable) {
       ui.streakHint.textContent = "🛡️ Có 1 khiên bảo vệ tiến độ.";
     } else {
-      ui.streakHint.textContent = stage === plantNames.length ? "Cây đã đạt giai đoạn cuối." : "";
+      ui.streakHint.textContent = finalStage ? "Cổ thụ · duy trì " + STAGE_TARGETS.at(-1) + " giọt mỗi ngày." : "";
     }
     for (const [index, dot] of Array.from(ui.streakDots.children).entries()) {
       dot.classList.toggle("is-filled", index < days);
       dot.classList.toggle("is-pending", index >= settled && index < days);
     }
-    const summary = "Giai đoạn " + stage + " · " + label;
+    const summary = "Giai đoạn " + stage + " · " + label
+      + (currentDay ? " · Mốc hôm nay " + plant.targetDrops + " giọt" : " · Đang chờ đồng bộ mốc tưới");
     ui.rulesStreak.textContent = summary;
     ui.galleryStreak.textContent = summary;
     for (const { tile, badge, stage: tileStage, dry } of galleryTiles) {
       const current = stage === tileStage && plant.wilted === dry;
       tile.classList.toggle("is-current", current);
       badge.hidden = !current;
-      if (current) badge.textContent = days + "/" + streakGoal;
+      if (current) badge.textContent = currentDay
+        ? days + "/" + streakGoal + " · Hôm nay " + plant.targetDrops + " giọt"
+        : days + "/" + streakGoal;
     }
   }
 
@@ -291,7 +306,12 @@ const FocusUI = (() => {
           const title = document.createElement("strong");
           title.textContent = (index + 1) + " · " + plantNames[index];
           const label = document.createElement("small");
-          label.textContent = dry ? "Héo" : plantTargets[index] + " 💧";
+          const start = STAGE_TARGETS[index];
+          const increase = STAGE_DAILY_INCREASES[index];
+          const end = stageTarget(index, STAGE_GROWTH_DAY_CAP);
+          label.textContent = dry ? "Héo" : increase
+            ? start + "–" + end + " giọt · +" + increase + " sau mỗi ngày đủ nước"
+            : start + " giọt mỗi ngày";
           const badge = document.createElement("small");
           badge.className = "gallery-streak";
           badge.hidden = true;
@@ -302,8 +322,8 @@ const FocusUI = (() => {
         }
       }
     }
-    const { plant } = FocusState.data;
-    renderStreak(plant, plant.dropsToday);
+    const { plant, users } = FocusState.data;
+    renderStreak(plant, users.ppa.waterDropsToday + users.tbv.waterDropsToday);
     openDialog(ui.plantGallery);
     ui.plantGallery.scrollTop = 0;
     syncGallery();
@@ -382,6 +402,30 @@ const FocusUI = (() => {
         + " · " + (amounts.ppa + amounts.tbv) + " giọt";
       ui.waterHistory.append(entry);
     }
+  }
+
+  function renderPlantRules() {
+    const { sleep, study, focus, sport, chores } = WATER_REWARDS;
+    const [shortSleep, fullSleep] = sleep.tiers;
+    const { out_running, out_gym, home_cooking, home_chores } = WATER_ACTIVITY_MINUTES;
+    const rewardSummary = ({ minutes, reward, cap }) =>
+      reward + " giọt mỗi " + minutes + " phút, tối đa " + cap + " giọt mỗi người mỗi ngày.";
+    ui.ruleSleep.textContent = "Cộng thời lượng các giấc ngủ kết thúc trong ngày. Khi thức dậy, đủ "
+      + shortSleep.minutes / 60 + " giờ nhận " + shortSleep.reward + " giọt, đủ "
+      + fullSleep.minutes / 60 + " giờ nhận tổng cộng " + fullSleep.reward + " giọt.";
+    ui.ruleStudy.textContent = rewardSummary(study);
+    ui.ruleFocus.textContent = rewardSummary(focus);
+    ui.ruleSport.textContent = "Chạy " + out_running + " phút hoặc tập gym " + out_gym
+      + " phút nhận " + sport.reward + " giọt. Hai hoạt động dùng chung giới hạn " + sport.cap + " giọt mỗi người mỗi ngày.";
+    ui.ruleChores.textContent = "Nấu " + home_cooking + " phút hoặc dọn " + home_chores
+      + " phút nhận " + chores.reward + " giọt. Hai hoạt động dùng chung giới hạn " + chores.cap + " giọt mỗi người mỗi ngày.";
+    ui.ruleStageGrowth.textContent = "Giai đoạn 1–4 bắt đầu ở " + STAGE_TARGETS.slice(0, -1).join(", ")
+      + " giọt. Sau mỗi ngày tưới đủ, mốc ngày kế tiếp tăng lần lượt " + STAGE_DAILY_INCREASES.slice(0, -1).join(", ")
+      + " giọt, tối đa " + STAGE_GROWTH_DAY_CAP + " lần mỗi giai đoạn. Ngày thiếu nước giữ nguyên mốc nếu cây chưa lùi giai đoạn.";
+    ui.ruleStageMaintenance.textContent = "Giai đoạn 5 giữ mốc " + STAGE_TARGETS.at(-1)
+      + " giọt mỗi ngày. Mốc này bằng " + Math.round(STAGE_MAINTENANCE_RATIO * 100) + "% của "
+      + DAILY_WATER_MAX + " giọt tối đa cho cả hai, làm tròn lên. Mỗi người có thể nhận tối đa "
+      + DAILY_WATER_MAX_PER_PROFILE + " giọt mỗi ngày.";
   }
 
   function openPlantRules() {
@@ -751,6 +795,7 @@ const FocusUI = (() => {
       if (chosen === "ppa" || chosen === "tbv") profile = chosen;
     } catch {}
     lastDay = FocusState.today();
+    renderPlantRules();
     buildDock();
     quests.mount();
     for (let index = 0; index < streakGoal; index++) {

@@ -43,13 +43,26 @@ service cloud.firestore {
       let changes = after.diff(before);
       return changes.removedKeys().size() == 0 && changes.changedKeys().hasOnly([liveDate]);
     }
-    function validRoom(data) {
+    function validWaterTarget(data, canRetainLegacyTarget) {
+      let plant = data.plant;
+      let version = plant.get('balanceVersion', 0);
+      let growthDays = plant.get('stageGrowthDays', 0);
+      let stage = data.currentStage - 1;
+      let legacy = data.targetWater in [40, 55, 70, 85, 100];
+      let expected = [48, 69, 90, 111, 186][stage] + [1, 1, 1, 2, 0][stage] * growthDays;
+      return data.targetWater is int && data.targetWater == plant.targetDrops
+        && ((version < 1 && legacy) || (version >= 1
+          && growthDays is int && growthDays >= 0 && growthDays <= 20
+          && (stage < 4 || growthDays == 0)
+          && (data.targetWater == expected || (legacy && canRetainLegacyTarget))));
+    }
+    function validRoom(data, canRetainLegacyTarget) {
       return data.actor in ['ppa', 'tbv', 'system'] && data.revision is int && data.revision > 0
         && data.clientEvaluatedAt is timestamp && data.clientEvaluatedAt <= request.time + duration.value(2, 'm')
         && data.updatedAt == request.time && data.plant is map
         && data.currentStage is int && data.currentStage >= 1 && data.currentStage <= 5
         && data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 21
-        && data.targetWater in [40, 55, 70, 85, 100]
+        && validWaterTarget(data, canRetainLegacyTarget)
         && data.messages is list && data.messages.size() <= 160
         && getAfter(ppaPath()).data.diff(data.users.ppa).affectedKeys().hasOnly(['waterToday', 'questsDone', 'lastActive'])
         && getAfter(tbvPath()).data.diff(data.users.tbv).affectedKeys().hasOnly(['waterToday', 'questsDone', 'lastActive']);
@@ -57,11 +70,13 @@ service cloud.firestore {
 
     match /pocket_space/plant_state {
       allow get: if true;
-      allow create: if validRoom(request.resource.data) && request.resource.data.revision == 1;
-      allow update: if validRoom(request.resource.data)
+      allow create: if validRoom(request.resource.data, false) && request.resource.data.revision == 1;
+      allow update: if validRoom(request.resource.data, request.resource.data.plant.date == resource.data.plant.date
+          && request.resource.data.targetWater == resource.data.targetWater)
         && request.resource.data.revision == resource.data.revision + 1
         && request.resource.data.plant.get('wateringVersion', 0) >= resource.data.plant.get('wateringVersion', 0)
         && request.resource.data.plant.get('rewardProgressVersion', 0) >= resource.data.plant.get('rewardProgressVersion', 0)
+        && request.resource.data.plant.get('balanceVersion', 0) >= resource.data.plant.get('balanceVersion', 0)
         && historyPreserved(resource.data.plant.waterHistoryByDate,
           request.resource.data.plant.waterHistoryByDate, resource.data.plant.date)
         && historyPreserved(resource.data.plant.historyStatusByDate,

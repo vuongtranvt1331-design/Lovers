@@ -12,7 +12,7 @@ Từ thư mục bản Git Lovers, người quản trị Firebase có thể công
 
 Nếu dự án có thêm ứng dụng khác, kiểm tra và hợp nhất quy tắc của các ứng dụng trước khi công bố.
 
-Công bố bộ quy tắc này trước khi đưa bản tưới thủ công và thưởng cộng dồn lên Pages. Sau khi dữ liệu chuyển sang bản mới, quy tắc bảo vệ kho nước, dấu đã làm nhiệm vụ và phút tích lũy trước thao tác ghi từ tab còn mở bản cũ. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
+Công bố bộ quy tắc này trước khi đưa bản mục tiêu nước theo ngày lên Pages. Sau khi dữ liệu chuyển sang bản mới, quy tắc bảo vệ mục tiêu nước, kho nước, dấu đã làm nhiệm vụ và phút tích lũy trước thao tác ghi từ tab còn mở bản cũ. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
 
 ## 2. Đưa mã lên GitHub Pages
 

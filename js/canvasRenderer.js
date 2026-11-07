@@ -1,4 +1,4 @@
-import { spriteURL } from "./catalog.js?v=quest-progress";
+import { spriteURL } from "./catalog.js?v=bonsai-balance";
 
 export const CanvasRenderer = (() => {
   const BACKGROUND = '#f4f8f3';

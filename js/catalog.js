@@ -45,6 +45,26 @@ export const DAILY_QUESTS = [
   { id: "ppa_kiss_tbv", title: "PPA thơm má TBV", icon: "💋", reward: 2, pair: true },
 ];
 
+export const BALANCE_VERSION = 1;
+export const STAGE_GROWTH_DAY_CAP = 20;
+export const STAGE_DAILY_INCREASES = [1, 1, 1, 2, 0];
+export const STAGE_MAINTENANCE_RATIO = 0.85;
+
+export const WATER_REWARDS = {
+  sleep: { category: "sleep", minutes: null, reward: null, cap: 10, wakeOnly: true,
+    tiers: [{ minutes: 420, reward: 5 }, { minutes: 480, reward: 10 }] },
+  study: { category: "study", minutes: 40, reward: 8, cap: 24, pairGroup: "study" },
+  focus: { category: "focus", minutes: 50, reward: 6, cap: 36, pairGroup: "work" },
+  sport: { category: "sport", minutes: 30, reward: 10, cap: 20 },
+  chores: { category: "chores", minutes: 30, reward: 4, cap: 8 },
+};
+export const WATER_ACTIVITY_MINUTES = { out_running: 30, out_gym: 20, home_cooking: 20, home_chores: 30 };
+
+export const DAILY_WATER_MAX_PER_PROFILE = Object.values(WATER_REWARDS).reduce((sum, rule) => sum + rule.cap, 0)
+  + DAILY_QUESTS.reduce((sum, quest) => sum + quest.reward, 0);
+export const DAILY_WATER_MAX = 2 * DAILY_WATER_MAX_PER_PROFILE;
+export const STAGE_TARGETS = [48, 69, 90, 111, Math.ceil(DAILY_WATER_MAX * STAGE_MAINTENANCE_RATIO)];
+
 
 const spriteRoot = new URL("../assets/sprites/", import.meta.url);
 

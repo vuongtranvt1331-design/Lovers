@@ -8,7 +8,7 @@
 <title>Pocket Space: Focus &amp; Together</title>
 <link rel="stylesheet" href="./css/style.css">
 <link rel="stylesheet" href="./css/components.css?v=quest-progress">
-<link rel="stylesheet" href="./css/modals.css?v=quest-progress">
+<link rel="stylesheet" href="./css/modals.css?v=bonsai-balance">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -132,7 +132,7 @@
         <p class="plant-poured-label" id="plantPouredLabel">Đã tưới hôm nay</p>
         <div class="water-values">
           <span class="water-side"><span class="water-key" aria-hidden="true"></span><strong id="partnerWater" class="mono">TBV · 0 💧</strong></span>
-          <span class="water-total mono"><span class="drop" aria-hidden="true"></span> <strong id="waterTotal">0</strong>/<span id="waterTarget">40</span></span>
+          <span class="water-total mono"><span class="drop" aria-hidden="true"></span> <strong id="waterTotal">0</strong>/<span id="waterTarget">—</span></span>
           <span class="water-side own"><strong id="ownWater" class="mono">PPA · 0 💧</strong><span class="water-key" aria-hidden="true"></span></span>
         </div>
         <div class="water-meter" aria-hidden="true">
@@ -238,7 +238,7 @@
     <button class="icon-button" type="button" id="plantGalleryClose" aria-label="Đóng bộ sưu tập">×</button>
   </header>
   <p class="muted small">Mỗi hàng là một giai đoạn. Cây xanh tốt ở bên trái, cây héo ở bên phải.</p>
-  <p class="streak-guide">Hai bạn cần tích lũy 21 ngày đủ nước để cây bước sang giai đoạn phát triển tiếp theo.</p>
+  <p class="streak-guide">Hai bạn cần tích lũy 21 ngày đủ nước để cây bước sang giai đoạn tiếp theo. Mỗi khoảng bên dưới là từ mốc khởi đầu đến mốc cao nhất của giai đoạn.</p>
   <p id="galleryStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/21 ngày đủ nước</p>
   <div class="plant-gallery-grid" id="plantGalleryGrid"></div>
 </dialog>
@@ -253,15 +253,17 @@
   <ul class="rule-list" id="plantRules">
     <li><strong>Tưới bonsai.</strong> Hoàn thành hoạt động hoặc nhiệm vụ để nhận giọt nước. Chạm vào cây để tưới toàn bộ số giọt bạn đang có. Chỉ nước đã tưới mới tính vào mục tiêu ngày.</li>
     <li><strong>Thời gian cộng dồn.</strong> Các phiên của cùng một hoạt động cộng phút trong ngày. Khi đủ mốc, giọt thưởng vào kho của bạn. Phần phút còn dở từ các phiên đã kết thúc đặt lại lúc 00:00.</li>
-    <li><strong>Ngủ.</strong> Tính khi thức dậy theo tổng thời lượng các giấc ngủ kết thúc trong ngày. Đủ 7 giờ nhận 5 giọt, đủ 8 giờ nhận tổng cộng 10 giọt.</li>
-    <li><strong>Học hoặc đọc.</strong> 8 giọt mỗi 80 phút, tối đa 24 giọt mỗi ngày.</li>
-    <li><strong>Tập trung làm việc.</strong> 6 giọt mỗi 70 phút, tối đa 36 giọt mỗi ngày.</li>
-    <li><strong>Chạy bộ và tập gym.</strong> Chạy 30 phút hoặc tập gym 20 phút nhận 10 giọt, chung trần 20 giọt mỗi ngày.</li>
-    <li><strong>Nấu ăn và dọn dẹp.</strong> Nấu 20 phút hoặc dọn 60 phút nhận 4 giọt, chung trần 8 giọt mỗi ngày.</li>
+    <li><strong>Ngủ.</strong> <span id="ruleSleep"></span></li>
+    <li><strong>Học hoặc đọc.</strong> <span id="ruleStudy"></span></li>
+    <li><strong>Tập trung làm việc.</strong> <span id="ruleFocus"></span></li>
+    <li><strong>Chạy bộ và tập gym.</strong> <span id="ruleSport"></span></li>
+    <li><strong>Nấu ăn và dọn dẹp.</strong> <span id="ruleChores"></span></li>
     <li><strong>Dùng bữa.</strong> Có đồng hồ và lịch sử hoạt động, 0 giọt thưởng.</li>
     <li><strong>Thư giãn hoặc dùng điện thoại.</strong> Không nhận nước tưới.</li>
     <li><strong>Focus Cùng Nhau.</strong> Khi hai bạn cùng học hoặc cùng làm việc trong ít nhất 80% thời lượng của một mốc thưởng, số giọt tăng 20%, làm tròn lên trong giới hạn ngày.</li>
-    <li>Mục tiêu ở năm giai đoạn lần lượt là 40, 55, 70, 85 và 100 giọt. Ngày chốt lúc 00:00 giờ Việt Nam. Đủ 21 ngày tích lũy, cây lớn thêm một giai đoạn. Sang ngày mới, cả nước chưa tưới và bộ đếm đã tưới về 0.</li>
+    <li><strong>Mốc tưới tăng dần.</strong> <span id="ruleStageGrowth"></span></li>
+    <li><strong>Cổ thụ.</strong> <span id="ruleStageMaintenance"></span></li>
+    <li><strong>Chốt ngày.</strong> Lúc 00:00 giờ Việt Nam, ứng dụng chốt ngày và cập nhật mốc tưới. Đủ 21 ngày tích lũy, cây lớn thêm một giai đoạn và dùng mốc khởi đầu mới. Sang ngày mới, cả nước chưa tưới và bộ đếm đã tưới về 0.</li>
     <li>Mốc 7 và 14 ngày mở chồi mới và một khiên. Có thể giữ một khiên. Khi thiếu nước, khiên tự dùng để giữ tiến độ. Cây vẫn héo.</li>
     <li>Mỗi ngày thiếu nước khi hết khiên trừ 5 ngày tích lũy. Sau mỗi ba ngày thiếu nước liên tiếp, cây lùi một giai đoạn và tiến độ trở về 0. Giai đoạn thấp nhất là mầm hạt.</li>
   </ul>
@@ -315,6 +317,6 @@
   </div>
   <p id="historyDetail" class="small muted" role="status"></p>
 </dialog>
-<script type="module" src="./js/app.js?v=quest-progress"></script>
+<script type="module" src="./js/app.js?v=bonsai-balance"></script>
 </body>
 </html>
