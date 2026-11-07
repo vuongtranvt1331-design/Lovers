@@ -1,6 +1,6 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=home-scenes";
-import { CanvasRenderer } from "./canvasRenderer.js?v=home-scenes";
-import { FocusState } from "./state.js?v=home-scenes";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=quest-progress";
+import { CanvasRenderer } from "./canvasRenderer.js?v=quest-progress";
+import { FocusState } from "./state.js?v=quest-progress";
 import { DAY_MS, dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
 
 export const Timeline = (() => {

@@ -9,6 +9,10 @@ import { FocusState as PeerState } from '../js/state.js?peer';
 const day = '2026-11-07';
 const midnight = dateStart(nextDay(day));
 const noon = dateStart(day) + 12 * 60 * MINUTE;
+const COOKING = 20 * MINUTE;
+const FOCUS = 70 * MINUTE;
+const STUDY = 80 * MINUTE;
+const FOCUS_OVERLAP_GAP = FOCUS / 5;
 let room;
 let logs;
 
@@ -87,9 +91,11 @@ test('rest clocks survive reload and log their own time across midnight without 
   assert.equal(FocusState.data.plant.dropsToday, 0);
 });
 
-test('an explicit meal from 23:50 to 00:10 closes once and credits the new day', async () => {
-  await FocusState.open(midnight - 10 * MINUTE);
-  await FocusState.changeActivity('ppa', 'home_eating', midnight - 10 * MINUTE, 1);
+test('uninterrupted cooking from 23:50 to 00:10 closes once and credits the new day', async () => {
+  const start = midnight - 10 * MINUTE;
+  await FocusState.open(start);
+  await FocusState.changeActivity('ppa', 'home_cooking', start);
+  assert.equal(FocusState.rewardInfo('ppa', start).minutes, 20);
   await FocusState.refresh(midnight + 10 * MINUTE - 1);
   assert.equal(FocusState.data.plant.dropsToday, 0);
   await FocusState.refresh(midnight + 10 * MINUTE);
@@ -109,9 +115,28 @@ test('an explicit meal from 23:50 to 00:10 closes once and credits the new day',
   assert.equal(logs.filter(entry => entry.awardedWater === 4).length, 1);
 });
 
+test('meals keep timers and past awards but grant no new water', async () => {
+  const oldDeadline = noon + 20 * MINUTE;
+  room.plant = { date: day, wateringVersion: 1, rewardHistoryByDate: { [day]: { ppa: { meal: 4 } } } };
+  room.users.ppa = { currentActivity: 'home_eating', startTime: noon, explicitSession: true,
+    plannedEndTime: oldDeadline, waterDate: day, waterDropsAvailable: 4 };
+  await FocusState.open(noon);
+  assert.equal(FocusState.data.users.ppa.plannedEndTime, oldDeadline);
+  assert.equal(FocusState.rewardInfo('ppa', noon).category, null);
+  await FocusState.refresh(oldDeadline);
+  assert.equal(FocusState.data.users.ppa.currentActivity, 'home_idle');
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 4);
+  assert.equal(FocusState.data.plant.rewardHistoryByDate[day].ppa.meal, 4);
+  await FocusState.changeActivity('ppa', 'home_eating', oldDeadline);
+  await FocusState.refresh(oldDeadline + 50 * MINUTE);
+  assert.equal(FocusState.elapsedMs('ppa', oldDeadline + 50 * MINUTE), 50 * MINUTE);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 4);
+  assert.equal(logs.filter(log => log.awardedWater > 0).length, 0);
+});
+
 test('a reward earned exactly at midnight retains its new-day ledger row', async () => {
-  await FocusState.open(midnight - 20 * MINUTE);
-  await FocusState.changeActivity('ppa', 'home_eating', midnight - 20 * MINUTE);
+  await FocusState.open(midnight - COOKING);
+  await FocusState.changeActivity('ppa', 'home_cooking', midnight - COOKING);
   await FocusState.refresh(midnight);
   assert.equal(today(midnight - 1), day);
   assert.equal(today(midnight), nextDay(day));
@@ -120,13 +145,13 @@ test('a reward earned exactly at midnight retains its new-day ledger row', async
 });
 
 test('midnight expires unpoured drops and a reward due at midnight can be poured that day', async () => {
-  const start = midnight - 20 * MINUTE;
+  const start = midnight - COOKING;
   await FocusState.open(start);
   assert.equal(await FocusState.completeQuest('ppa', 'eat_veggies', start), true);
   assert.equal(await FocusState.completeQuest('ppa', 'eat_veggies', start), false);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 1);
   room.users.tbv.waterDropsAvailable = 41;
-  await FocusState.changeActivity('ppa', 'home_eating', start);
+  await FocusState.changeActivity('ppa', 'home_cooking', start);
   assert.equal(await FocusState.waterPlant('ppa', midnight), 4);
   assert.equal(FocusState.data.plant.historyStatusByDate[day], 'failed');
   assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 0, tbv: 0 });
@@ -135,6 +160,27 @@ test('midnight expires unpoured drops and a reward due at midnight can be poured
   assert.equal(FocusState.data.users.ppa.waterDropsToday, 4);
   assert.equal(FocusState.data.users.ppa.lastWateredDate, nextDay(day));
   assert.equal(await FocusState.waterPlant('ppa', midnight - 1), false);
+});
+
+test('fresh air grants one unpoured drop per profile on each Vietnam day', async () => {
+  const before = midnight - 1;
+  await FocusState.open(before);
+  for (const profile of ['ppa', 'tbv']) {
+    assert.equal(await FocusState.completeQuest(profile, 'fresh_air', before), true);
+    assert.equal(await FocusState.completeQuest(profile, 'fresh_air', before), false);
+    assert.equal(FocusState.data.users[profile].waterDropsAvailable, 1);
+    assert.equal(FocusState.data.users[profile].waterDropsToday, 0);
+  }
+  FocusState.clearRemote();
+  assert.equal(FocusState.applyRemote(room), true);
+  assert.equal(await FocusState.completeQuest('ppa', 'fresh_air', before), false);
+  await FocusState.refresh(midnight);
+  assert.deepEqual(FocusState.data.plant.dailyQuests[day], { fresh_air_ppa: true, fresh_air_tbv: true });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 0);
+  assert.equal(await FocusState.completeQuest('ppa', 'fresh_air', midnight), true);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 1);
+  assert.equal(FocusState.data.plant.dropsToday, 0);
 });
 
 test('two tabs can pour the whole balance only once, even above the target', async () => {
@@ -186,7 +232,7 @@ test('old automatic contributions survive upgrade without marking a manual pour'
     historyStatusByDate: { [previous]: 'success' },
   };
   room.users.ppa = {
-    currentActivity: 'home_eating', startTime: noon - 20 * MINUTE, explicitSession: true,
+    currentActivity: 'home_cooking', startTime: noon - COOKING, explicitSession: true,
     waterDate: day, waterDropsToday: 10,
   };
   await FocusState.open(noon);
@@ -224,32 +270,85 @@ test('slight partner clock skew is accepted without backdating the shared interv
   assert.equal(FocusState.data.users.tbv.startTime, noon + 1_000);
 });
 
+test('same-activity fragments preserve fractional time across reload and pay once at the exact deadline', async () => {
+  const carry = 10 * MINUTE + 500;
+  await FocusState.open(noon);
+  await FocusState.changeActivity('ppa', 'work_locked_in', noon);
+  await FocusState.changeActivity('ppa', 'home_desk_work', noon + carry);
+  const resume = noon + 20 * MINUTE;
+  await FocusState.changeActivity('ppa', 'work_locked_in', resume);
+  assert.equal(FocusState.data.plant.rewardProgressVersion, 1);
+  FocusState.clearRemote();
+  assert.equal(FocusState.applyRemote(room), true);
+  const info = FocusState.rewardInfo('ppa', resume + MINUTE);
+  assert.equal(info.carriedMs, carry);
+  assert.equal(info.progressMs, carry + MINUTE);
+  assert.equal(info.remainingMs, FOCUS - carry - MINUTE);
+  const deadline = resume + FOCUS - carry;
+  assert.equal(FocusState.nextRefreshAt(resume), deadline);
+  await FocusState.refresh(deadline - 1);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  PeerState.clearRemote();
+  assert.equal(PeerState.applyRemote(room), true);
+  await Promise.all([FocusState.refresh(deadline), PeerState.refresh(deadline)]);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 6);
+  assert.equal(FocusState.data.users.ppa.currentActivity, 'home_idle');
+  assert.deepEqual(FocusState.data.users.ppa.rewardProgress.work_locked_in, undefined);
+  assert.equal(FocusState.data.users.ppa.rewardProgress.home_desk_work.elapsedMs, resume - noon - carry);
+  const rewards = logs.filter(entry => entry.kind === 'pomodoro' && entry.user === 'ppa');
+  assert.equal(rewards.length, 1);
+  assert.equal(rewards[0].startTimestamp, resume);
+  assert.equal(rewards[0].endTimestamp, deadline);
+});
+
+test('yesterday carry cannot shorten a deadline at midnight, and a cross-day interruption saves only today', async () => {
+  const carry = 10 * MINUTE;
+  await FocusState.open(noon);
+  await FocusState.changeActivity('ppa', 'home_cooking', noon);
+  await FocusState.changeActivity('ppa', 'home_idle', noon + carry);
+  const start = midnight - COOKING + carry;
+  await FocusState.changeActivity('ppa', 'home_cooking', start);
+  assert.equal(FocusState.rewardInfo('ppa', start).nextCreditAt, midnight + carry);
+  await FocusState.refresh(midnight);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.users.ppa.currentActivity, 'home_cooking');
+  const todayCarry = 5 * MINUTE;
+  await FocusState.changeActivity('ppa', 'home_idle', midnight + todayCarry);
+  const resume = midnight + 6 * MINUTE;
+  await FocusState.changeActivity('ppa', 'home_cooking', resume);
+  assert.equal(FocusState.rewardInfo('ppa', resume).carriedMs, todayCarry);
+  await FocusState.refresh(resume + COOKING - todayCarry);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 4);
+});
+
 test('work overlap at 80 percent earns the rounded +20 percent once per block', async () => {
   await FocusState.open(noon);
   await FocusState.changeActivity('ppa', 'work_locked_in', noon);
   assert.equal(await FocusState.changeActivity('ppa', 'work_locked_in', noon + 2 * MINUTE), false);
-  await FocusState.changeActivity('tbv', 'home_desk_work', noon + 5 * MINUTE);
-  await FocusState.refresh(noon + 30 * MINUTE);
+  await FocusState.changeActivity('tbv', 'home_desk_work', noon + FOCUS_OVERLAP_GAP);
+  await FocusState.refresh(noon + FOCUS + FOCUS_OVERLAP_GAP);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 8);
   assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 8);
   assert.equal(logs.filter(entry => entry.pairedBonus).length, 2);
-  await FocusState.refresh(noon + 70 * MINUTE);
+  const again = noon + 2 * FOCUS;
+  await FocusState.refresh(again);
   assert.equal(FocusState.data.plant.dropsToday, 0);
-  await FocusState.changeActivity('ppa', 'work_locked_in', noon + 70 * MINUTE);
-  await FocusState.refresh(noon + 95 * MINUTE);
+  await FocusState.changeActivity('ppa', 'work_locked_in', again);
+  await FocusState.refresh(again + FOCUS);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 14);
 });
 
 test('less than 80 percent or different groups receive only the base reward', async () => {
   await FocusState.open(noon);
   await FocusState.changeActivity('ppa', 'work_locked_in', noon);
-  await FocusState.changeActivity('tbv', 'home_desk_work', noon + 5 * MINUTE + 1);
-  await FocusState.refresh(noon + 30 * MINUTE + 1);
+  await FocusState.changeActivity('tbv', 'home_desk_work', noon + FOCUS_OVERLAP_GAP + 1);
+  await FocusState.refresh(noon + FOCUS + FOCUS_OVERLAP_GAP + 1);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 6);
   assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 6);
-  await FocusState.changeActivity('ppa', 'home_desk_work', noon + 31 * MINUTE);
-  await FocusState.changeActivity('tbv', 'home_studying', noon + 31 * MINUTE);
-  await FocusState.refresh(noon + 61 * MINUTE);
+  const again = noon + FOCUS + FOCUS_OVERLAP_GAP + MINUTE;
+  await FocusState.changeActivity('ppa', 'home_desk_work', again);
+  await FocusState.changeActivity('tbv', 'home_studying', again);
+  await FocusState.refresh(again + STUDY);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 12);
   assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 14);
   assert.equal(logs.some(entry => entry.pairedBonus), false);
@@ -259,11 +358,47 @@ test('paired overlap accumulates across matching portions separated by a break',
   await FocusState.open(noon);
   await FocusState.changeActivity('ppa', 'work_locked_in', noon);
   await FocusState.changeActivity('tbv', 'home_desk_work', noon);
-  await FocusState.changeActivity('tbv', 'home_gaming', noon + 10 * MINUTE);
-  await FocusState.changeActivity('tbv', 'work_locked_in', noon + 13 * MINUTE);
-  await FocusState.refresh(noon + 38 * MINUTE);
+  await FocusState.changeActivity('tbv', 'home_gaming', noon + 20 * MINUTE);
+  await FocusState.changeActivity('tbv', 'work_locked_in', noon + 25 * MINUTE);
+  await FocusState.refresh(noon + 25 * MINUTE + FOCUS);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 8);
   assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 6);
+});
+
+test('matched time from interrupted same-activity fragments counts toward the paired threshold', async () => {
+  const first = 32 * MINUTE;
+  const resume = noon + 40 * MINUTE;
+  await FocusState.open(noon);
+  for (const profile of ['ppa', 'tbv']) await FocusState.changeActivity(profile, 'work_locked_in', noon);
+  for (const profile of ['ppa', 'tbv']) await FocusState.changeActivity(profile, 'home_idle', noon + first);
+  await FocusState.changeActivity('ppa', 'work_locked_in', resume);
+  await FocusState.changeActivity('tbv', 'work_locked_in', resume + FOCUS_OVERLAP_GAP);
+  const ppaDeadline = resume + FOCUS - first;
+  assert.equal(FocusState.rewardInfo('ppa', ppaDeadline).pairedRatio, 0.8);
+  await FocusState.refresh(ppaDeadline + FOCUS_OVERLAP_GAP);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 8);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 8);
+});
+
+test('the daily category cap is shared and awards any remaining portion', async () => {
+  await FocusState.open(noon);
+  room.plant.rewardHistoryByDate[day] = { ppa: { focus: 34, chores: 4, sport: 10, study: 24 } };
+  const sessions = [
+    ['work_teaching', FOCUS, 36, 2], ['home_cooking', COOKING, 8, 4],
+    ['home_chores', 60 * MINUTE, 8, 0], ['out_gym', 20 * MINUTE, 20, 10],
+    ['out_running', 30 * MINUTE, 20, 0], ['home_studying', STUDY, 24, 0],
+  ];
+  let instant = noon;
+  let available = 0;
+  for (const [activity, duration, cap, reward] of sessions) {
+    assert.equal(await FocusState.changeActivity('ppa', activity, instant), true);
+    assert.equal(FocusState.targetMs('ppa'), duration);
+    assert.equal(FocusState.rewardInfo('ppa', instant).cap, cap);
+    instant += duration;
+    await FocusState.refresh(instant);
+    available += reward;
+    assert.equal(FocusState.data.users.ppa.waterDropsAvailable, available);
+  }
 });
 
 test('sleep is wake-only and long sessions cannot create a history span above 24 hours', async () => {
@@ -277,6 +412,29 @@ test('sleep is wake-only and long sessions cannot create a history span above 24
   assert.equal(FocusState.data.plant.dropsToday, 0);
   assert.equal(logs.filter(entry => entry.kind === 'activity')
     .reduce((sum, entry) => sum + entry.durationMinutes, 0), 24 * 60);
+});
+
+test('sleep pays incremental wake-only tiers from naps ending on the same day', async () => {
+  const hour = 60 * MINUTE;
+  const first = midnight - 2 * hour;
+  await FocusState.open(first);
+  await FocusState.changeActivity('ppa', 'home_sleeping', first);
+  await FocusState.changeActivity('ppa', 'home_idle', midnight + 2 * hour);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  await FocusState.changeActivity('ppa', 'home_sleeping', midnight + 3 * hour);
+  assert.equal(FocusState.rewardInfo('ppa', midnight + 4 * hour).carriedMs, 4 * hour);
+  assert.equal(FocusState.rewardInfo('ppa', midnight + 4 * hour).progressMs, 5 * hour);
+  await FocusState.refresh(midnight + 6 * hour);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  await FocusState.changeActivity('ppa', 'home_idle', midnight + 6 * hour);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 5);
+  await FocusState.changeActivity('ppa', 'home_sleeping', midnight + 7 * hour);
+  await FocusState.changeActivity('ppa', 'home_idle', midnight + 8 * hour);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 10);
+  await FocusState.changeActivity('ppa', 'home_sleeping', midnight + 9 * hour);
+  await FocusState.changeActivity('ppa', 'home_idle', midnight + 10 * hour);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 10);
+  assert.deepEqual(logs.filter(log => log.awardedWater > 0).map(log => log.awardedWater), [5, 5]);
 });
 
 test('a finalized day seven grants a shield and a missed day consumes it without subtracting five', async () => {

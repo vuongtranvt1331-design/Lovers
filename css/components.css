@@ -332,8 +332,9 @@ body[data-together="true"] .actor-card {
   box-shadow: 0 2px 0 #E9DBC3;
 }
 body[data-together="true"] .actor-poke { border-color: #D9C3A0; }
-.actor-top { display: grid; gap: 2px; margin-bottom: 6px; }
-.actor-top h2 { margin-top: 2px; }
+.actor-top { display: grid; min-width: 0; gap: 3px; margin-bottom: 6px; }
+.actor-id { display: flex; align-items: baseline; gap: 5px; }
+.actor-id .kicker { letter-spacing: .04em; text-transform: none; white-space: nowrap; }
 .actor-scene {
   position: relative;
   width: clamp(140px, 45vw, 160px);
@@ -342,9 +343,10 @@ body[data-together="true"] .actor-poke { border-color: #D9C3A0; }
   margin-inline: auto;
 }
 .actor-poke { width: 100%; aspect-ratio: 1; }
-.actor-readout { min-width: 0; }
-.actor-activity { font-size: clamp(12px, 3.6vw, 15px); font-weight: 820; line-height: 1.19; overflow-wrap: anywhere; }
-.actor-elapsed { margin-top: 2px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.actor-readout { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.actor-activity, .actor-elapsed { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.actor-activity { flex: 1 1 auto; min-width: 0; font-size: clamp(11px, 3.1vw, 13px); font-weight: 820; line-height: 1.25; }
+.actor-elapsed { flex: 0 0 auto; max-width: 100%; font-size: clamp(9px, 2.5vw, 11px); color: var(--muted); }
 .actor-effects { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .speech-bubble {
   position: relative;

@@ -1,4 +1,4 @@
-import { canSelectActivity, DAILY_QUESTS } from './catalog.js?v=home-scenes';
+import { canSelectActivity, DAILY_QUESTS } from './catalog.js?v=quest-progress';
 import { PocketDB } from './db.js';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, offsetDay, timestamp, today } from './gameTime.js';
 
@@ -16,20 +16,26 @@ export const FocusState = (() => {
   const MAX_CATCH_UP_DAYS = 366;
   const MANUAL_WATERING_VERSION = 1;
   const SLEEP_TIERS = [{ minutes: 420, reward: 5 }, { minutes: 480, reward: 10 }];
+  const SLEEP_TARGET_MS = SLEEP_TIERS.at(-1).minutes * MINUTE;
+  const PREVIOUS_THRESHOLDS = { study: 30, focus: 25, sport: 30, chores: 20 };
+  const PREVIOUS_MEAL_MS = 20 * MINUTE;
   const REWARDS = {
-    sleep: { category: 'sleep', minutes: null, reward: null, cap: null, wakeOnly: true },
-    study: { category: 'study', minutes: 30, reward: 8, cap: 16, pairGroup: 'study' },
-    focus: { category: 'focus', minutes: 25, reward: 6, cap: 24, pairGroup: 'work' },
-    sport: { category: 'sport', minutes: 30, reward: 10, cap: 10 },
-    chores: { category: 'chores', minutes: 20, reward: 4, cap: 4 },
-    meal: { category: 'meal', minutes: 20, reward: 4, cap: null },
+    sleep: { category: 'sleep', minutes: null, reward: null, cap: 10, wakeOnly: true },
+    study: { category: 'study', minutes: 80, reward: 8, cap: 24, pairGroup: 'study' },
+    focus: { category: 'focus', minutes: 70, reward: 6, cap: 36, pairGroup: 'work' },
+    sport: { category: 'sport', minutes: 30, reward: 10, cap: 20 },
+    chores: { category: 'chores', minutes: 60, reward: 4, cap: 8 },
   };
   const REWARD_CATEGORY = {
     home_sleeping: 'sleep', home_studying: 'study',
     home_desk_work: 'focus', work_locked_in: 'focus', work_teaching: 'focus', office_focus_typing: 'focus',
     out_running: 'sport', out_gym: 'sport', home_cooking: 'chores', home_chores: 'chores',
-    home_eating: 'meal',
   };
+  const ACTIVITY_MINUTES = { out_gym: 20, home_cooking: 20 };
+  const activityRules = new Map(Object.entries(REWARD_CATEGORY).map(([activity, category]) => {
+    const rule = REWARDS[category];
+    return [activity, { ...rule, minutes: ACTIVITY_MINUTES[activity] ?? rule.minutes }];
+  }));
   const MESSAGE_LIMIT = 160;
   const IDLE = 'home_idle';
   let model = null;
@@ -42,7 +48,7 @@ export const FocusState = (() => {
   const time = value => timestamp(value) ?? Date.now();
   const bounded = (value, fallback, max = Number.MAX_SAFE_INTEGER) =>
     Number.isFinite(value) ? Math.min(max, Math.max(0, Math.trunc(value))) : fallback;
-  const ruleFor = activity => REWARDS[REWARD_CATEGORY[activity]];
+  const ruleFor = activity => activityRules.get(activity);
   const legacyReward = activity => activity === 'out_running' ? 15 : 10;
   const userKey = value => {
     const key = typeof value === 'string' ? value.toLowerCase() : '';
@@ -55,6 +61,41 @@ export const FocusState = (() => {
     return prefix + '-' + token;
   }
 
+  function readRewardProgress(key, raw) {
+    const progress = {};
+    for (const [activity, entry] of Object.entries(raw || {})) {
+      const rule = ruleFor(activity);
+      if (!rule || !canSelectActivity(key, activity)) continue;
+      const limit = rule.wakeOnly ? SLEEP_TARGET_MS : rule.minutes * MINUTE - 1;
+      const elapsedMs = bounded(entry?.elapsedMs, 0, limit);
+      if (elapsedMs) progress[activity] = {
+        elapsedMs, pairedMs: rule.pairGroup ? bounded(entry?.pairedMs, 0, elapsedMs) : 0,
+      };
+    }
+    return progress;
+  }
+
+  function readRewardTarget(rule, raw) {
+    if (!rule?.minutes) return null;
+    const target = rule.minutes * MINUTE;
+    const previous = PREVIOUS_THRESHOLDS[rule.category] * MINUTE;
+    if (raw.rewardTargetMs === target || raw.rewardTargetMs === previous) return raw.rewardTargetMs;
+    // Existing sessions keep the deadline persisted before targets increased.
+    return Object.hasOwn(raw, 'rewardProgress') ? target : previous;
+  }
+
+  function activityDeadline(activity, start, target, progress, day) {
+    if (start === null) return null;
+    const rule = ruleFor(activity);
+    if (rule?.wakeOnly) return null;
+    if (!rule) return start + DAY_MS;
+    const full = start + target;
+    if (today(start) !== day) return full;
+    const shortened = full - (progress[activity]?.elapsedMs ?? 0);
+    // A continuous session can cross midnight, but yesterday's saved fragments expire.
+    return today(shortened) === today(start) ? shortened : full;
+  }
+
   function readUser(key, raw, day) {
     const savedStart = timestamp(raw?.startTime);
     // Pre-upgrade saves did not distinguish a selected activity from the default clock.
@@ -64,33 +105,41 @@ export const FocusState = (() => {
     const startTime = explicitSession ? savedStart : null;
     const idleStartedAt = raw?.currentActivity === IDLE
       ? timestamp(raw.idleStartedAt) ?? timestamp(raw.lastActivityTimestamp) : null;
-    const rule = ruleFor(currentActivity);
-    const plannedEndTime = explicitSession && !rule?.wakeOnly
-      ? startTime + (rule?.minutes ? rule.minutes * MINUTE : DAY_MS) : null;
+    const rewardProgress = raw?.waterDate === day ? readRewardProgress(key, raw.rewardProgress) : {};
+    const rewardTargetMs = readRewardTarget(ruleFor(currentActivity), raw);
+    const legacyMealDeadline = currentActivity === 'home_eating' && raw.plannedEndTime === startTime + PREVIOUS_MEAL_MS
+      ? raw.plannedEndTime : null;
+    const pairedFocusMs = explicitSession ? bounded(raw.pairedFocusMs, 0, rewardTargetMs ?? 0) : 0;
+    const pairedFocusThrough = explicitSession ? Math.max(startTime, timestamp(raw.pairedFocusThrough) ?? startTime) : null;
+    const pairedFocusTodayMs = explicitSession ? bounded(raw.pairedFocusTodayMs,
+      today(startTime) === today(pairedFocusThrough) ? pairedFocusMs : 0, pairedFocusMs) : 0;
     return {
       id: key,
       user: key,
       currentActivity,
       startTime,
       idleStartedAt,
-      plannedEndTime,
+      plannedEndTime: legacyMealDeadline ?? activityDeadline(currentActivity, startTime, rewardTargetMs, rewardProgress, day),
       explicitSession,
       sessionVersion: Math.max(1, bounded(raw?.sessionVersion, 1)),
       lastActivityTimestamp: timestamp(raw?.lastActivityTimestamp) ?? savedStart,
       waterDropsToday: raw?.waterDate === day ? bounded(raw.waterDropsToday, 0) : 0,
       waterDropsAvailable: raw?.waterDate === day ? bounded(raw.waterDropsAvailable, 0) : 0,
       waterDate: day,
+      rewardProgress,
+      rewardTargetMs,
       lastWateredDate: dateStart(raw?.lastWateredDate) !== null && raw.lastWateredDate <= day
         ? raw.lastWateredDate : null,
       creditedActivityStartTime: explicitSession && raw.creditedActivityStartTime === startTime ? startTime : null,
       oneTimeRewardHandled: explicitSession && raw.oneTimeRewardHandled === true,
-      pairedFocusMs: explicitSession ? bounded(raw.pairedFocusMs, 0, 30 * MINUTE) : 0,
-      pairedFocusThrough: explicitSession ? Math.max(startTime, timestamp(raw.pairedFocusThrough) ?? startTime) : null,
+      pairedFocusMs,
+      pairedFocusThrough,
+      pairedFocusTodayMs,
     };
   }
 
   function categories(raw) {
-    return Object.fromEntries(Object.keys(REWARDS).map(key => [key, bounded(raw?.[key], 0)]));
+    return Object.fromEntries([...Object.keys(REWARDS), 'meal'].map(key => [key, bounded(raw?.[key], 0)]));
   }
 
   function dayCategories(raw) {
@@ -146,6 +195,7 @@ export const FocusState = (() => {
       dailyQuests: readDailyQuests(raw?.dailyQuests, date),
       wilted: raw?.wilted === true,
       wateringVersion: bounded(raw?.wateringVersion, raw ? 0 : MANUAL_WATERING_VERSION),
+      rewardProgressVersion: Math.max(1, bounded(raw?.rewardProgressVersion, 1)),
       date,
       dropsToday: bounded(raw?.dropsToday, 0),
       targetDrops: STAGE_TARGETS.includes(raw?.targetDrops) ? raw.targetDrops : STAGE_TARGETS[currentStage - 1],
@@ -184,15 +234,21 @@ export const FocusState = (() => {
         const record = plant.waterHistoryByDate[day] ??= { ppa: 0, tbv: 0 };
         record[key] += amount;
       }
-      const rule = ruleFor(entry.activity);
-      if (recoverCategories && rule) {
+      const category = entry.activity === 'home_eating' ? 'meal' : ruleFor(entry.activity)?.category;
+      if (recoverCategories && category) {
         const record = plant.rewardHistoryByDate[day] ??= dayCategories();
-        record[key][rule.category] += amount;
+        record[key][category] += amount;
       }
     }
     for (const key of USERS) {
       const recorded = plant.waterHistoryByDate[plant.date]?.[key] ?? 0;
-      users[key].waterDropsToday = Math.max(users[key].waterDropsToday, recorded);
+      const user = users[key];
+      user.waterDropsToday = Math.max(user.waterDropsToday, recorded);
+      const paidSleep = creditedOn(plant, user, 'sleep', plant.date);
+      const sleepTier = SLEEP_TIERS.findLast(tier => tier.reward <= paidSleep);
+      if (sleepTier && (user.rewardProgress.home_sleeping?.elapsedMs ?? 0) < sleepTier.minutes * MINUTE) {
+        user.rewardProgress.home_sleeping = { elapsedMs: sleepTier.minutes * MINUTE, pairedMs: 0 };
+      }
     }
     return { users, plant, messages: readMessages(raw?.messages) };
   }
@@ -259,6 +315,7 @@ export const FocusState = (() => {
         users[key].waterDate = plant.date;
         users[key].waterDropsToday = 0;
         users[key].waterDropsAvailable = 0;
+        users[key].rewardProgress = {};
       }
       plant.dropsToday = 0;
     }
@@ -281,20 +338,21 @@ export const FocusState = (() => {
     rollTo(draft, creditDate);
     const plant = draft.plant;
     const used = creditedOn(plant, user, rule.category, creditDate);
-    if (rule.cap !== null && used + waterDrops > rule.cap) return false;
+    const granted = rule.cap === null ? waterDrops : Math.min(waterDrops, rule.cap - used);
+    if (granted <= 0) return false;
     const daily = plant.rewardHistoryByDate[creditDate] ??= dayCategories();
-    daily[user.id][rule.category] = used + waterDrops;
+    daily[user.id][rule.category] = used + granted;
     if (plant.wateringVersion < MANUAL_WATERING_VERSION) {
-      user.waterDropsToday += waterDrops;
+      user.waterDropsToday += granted;
       updateTarget(draft);
     } else {
-      user.waterDropsAvailable += waterDrops;
+      user.waterDropsAvailable += granted;
     }
     user.creditedActivityStartTime = user.startTime;
     const end = Math.min(deadline, start + DAY_MS);
     const entry = logInterval(user.id, user.currentActivity, start, end, (end - start) / MINUTE, 'pomodoro');
-    logs.push({ ...entry, rewardCategory: rule.category, waterDrops, creditDate,
-      pairedBonus: Boolean(rule.pairGroup && waterDrops > rule.reward) });
+    logs.push({ ...entry, rewardCategory: rule.category, waterDrops: granted, creditDate,
+      pairedBonus: Boolean(rule.pairGroup && granted > rule.reward) });
     return true;
   }
 
@@ -302,40 +360,55 @@ export const FocusState = (() => {
     return user.id === 'ppa' ? 'tbv' : 'ppa';
   }
 
-  function pairedDuration(user, other, now) {
+  function pairedInterval(user, other, now) {
     const group = ruleFor(user.currentActivity)?.pairGroup;
     if (!group || !user.explicitSession || !other.explicitSession
-        || ruleFor(other.currentActivity)?.pairGroup !== group) return user.pairedFocusMs;
+        || ruleFor(other.currentActivity)?.pairGroup !== group) return null;
     const from = Math.max(user.pairedFocusThrough, user.startTime, other.startTime);
     const to = Math.min(now, user.plannedEndTime, other.plannedEndTime);
-    return user.pairedFocusMs + Math.max(0, to - from);
+    return to > from ? { from, to } : null;
+  }
+
+  function pairedDuration(user, other, now) {
+    const interval = pairedInterval(user, other, now);
+    return user.pairedFocusMs + (interval ? interval.to - interval.from : 0);
   }
 
   function freezePairing(draft, until) {
     for (const key of USERS) {
       const user = draft.users[key];
       if (!user.explicitSession || !ruleFor(user.currentActivity)?.pairGroup) continue;
-      user.pairedFocusMs = pairedDuration(user, draft.users[partnerOf(user)], until);
-      user.pairedFocusThrough = Math.max(user.pairedFocusThrough, Math.min(until, user.plannedEndTime));
+      const interval = pairedInterval(user, draft.users[partnerOf(user)], until);
+      const through = Math.max(user.pairedFocusThrough, Math.min(until, user.plannedEndTime));
+      const day = today(through);
+      if (day !== today(user.pairedFocusThrough)) user.pairedFocusTodayMs = 0;
+      if (interval) {
+        user.pairedFocusMs += interval.to - interval.from;
+        user.pairedFocusTodayMs += Math.max(0, interval.to - Math.max(interval.from, dateStart(day)));
+      }
+      user.pairedFocusThrough = through;
     }
   }
 
   function setActivity(user, activity, instant) {
     const explicitSession = activity !== IDLE;
     const rule = ruleFor(activity);
+    const rewardTargetMs = rule?.minutes ? rule.minutes * MINUTE : null;
     Object.assign(user, {
       currentActivity: activity,
       startTime: explicitSession ? instant : null,
       idleStartedAt: explicitSession ? null : instant,
-      plannedEndTime: explicitSession && !rule?.wakeOnly
-        ? instant + (rule?.minutes ? rule.minutes * MINUTE : DAY_MS) : null,
+      plannedEndTime: activityDeadline(activity, explicitSession ? instant : null,
+        rewardTargetMs, user.rewardProgress, user.waterDate),
       explicitSession,
       lastActivityTimestamp: instant,
       sessionVersion: user.sessionVersion + 1,
       creditedActivityStartTime: null,
       oneTimeRewardHandled: false,
+      rewardTargetMs,
       pairedFocusMs: 0,
       pairedFocusThrough: explicitSession ? instant : null,
+      pairedFocusTodayMs: 0,
     });
   }
 
@@ -349,6 +422,23 @@ export const FocusState = (() => {
     }
   }
 
+  function rememberInterrupted(user, end) {
+    const rule = ruleFor(user.currentActivity);
+    if (!rule?.minutes || user.oneTimeRewardHandled || user.creditedActivityStartTime === user.startTime) return;
+    const elapsed = end - Math.max(user.startTime, dateStart(user.waterDate));
+    if (elapsed <= 0) return;
+    const previous = user.rewardProgress[user.currentActivity];
+    const elapsedMs = Math.min(rule.minutes * MINUTE - 1, (previous?.elapsedMs ?? 0) + elapsed);
+    user.rewardProgress[user.currentActivity] = {
+      elapsedMs, pairedMs: Math.min(elapsedMs, (previous?.pairedMs ?? 0) + user.pairedFocusTodayMs),
+    };
+  }
+
+  function carriedIntoDeadline(user) {
+    if (user.rewardTargetMs === null || user.plannedEndTime >= user.startTime + user.rewardTargetMs) return null;
+    return user.rewardProgress[user.currentActivity] ?? null;
+  }
+
   function settle(draft, now, logs) {
     const due = USERS.map(key => draft.users[key])
       .filter(user => user.plannedEndTime !== null && user.plannedEndTime <= now)
@@ -357,13 +447,16 @@ export const FocusState = (() => {
     for (const user of due) {
       const deadline = user.plannedEndTime;
       freezePairing(draft, deadline);
-      if (today(deadline) >= draft.plant.date) {
+      const creditDate = today(deadline);
+      if (creditDate >= draft.plant.date) {
         const rule = ruleFor(user.currentActivity);
-        if (rule && !user.oneTimeRewardHandled) {
-          const bonus = rule.pairGroup && user.pairedFocusMs * 5 >= rule.minutes * MINUTE * 4;
+        if (rule && !user.oneTimeRewardHandled && user.creditedActivityStartTime !== user.startTime) {
+          const pairedMs = user.pairedFocusMs + (carriedIntoDeadline(user)?.pairedMs ?? 0);
+          const bonus = rule.pairGroup && pairedMs * 5 >= user.rewardTargetMs * 4;
           const waterDrops = bonus ? Math.ceil(rule.reward * 1.2) : rule.reward;
           award(draft, user, rule, user.startTime, deadline, waterDrops, logs);
         }
+        if (user.waterDate === creditDate) delete user.rewardProgress[user.currentActivity];
       }
       closeActivity(user, deadline, logs);
       setActivity(user, IDLE, deadline);
@@ -373,10 +466,17 @@ export const FocusState = (() => {
   }
 
   function creditSleep(draft, user, wakeAt, logs) {
-    if (user.currentActivity !== 'home_sleeping' || !user.explicitSession || user.oneTimeRewardHandled) return;
-    const minutes = (wakeAt - user.startTime) / MINUTE;
-    const tier = SLEEP_TIERS.findLast(entry => minutes >= entry.minutes);
-    if (tier) award(draft, user, REWARDS.sleep, user.startTime, wakeAt, tier.reward, logs);
+    if (user.currentActivity !== 'home_sleeping' || !user.explicitSession || user.oneTimeRewardHandled
+      || user.creditedActivityStartTime === user.startTime || wakeAt <= user.startTime) return;
+    const day = today(wakeAt);
+    const previous = user.rewardProgress.home_sleeping?.elapsedMs ?? 0;
+    const elapsedMs = Math.min(SLEEP_TARGET_MS, previous + Math.max(0, wakeAt - user.startTime));
+    user.rewardProgress.home_sleeping = { elapsedMs, pairedMs: 0 };
+    const tier = SLEEP_TIERS.findLast(entry => elapsedMs >= entry.minutes * MINUTE);
+    const credited = creditedOn(draft.plant, user, 'sleep', day);
+    if (tier && tier.reward > credited) {
+      award(draft, user, REWARDS.sleep, user.startTime, wakeAt, tier.reward - credited, logs);
+    }
   }
 
   function apply(raw, now, operation, legacyLogs, guard) {
@@ -451,7 +551,11 @@ export const FocusState = (() => {
   function snapshot() {
     const current = model || normalize(null, Date.now());
     return {
-      users: Object.fromEntries(USERS.map(key => [key, { ...current.users[key] }])),
+      users: Object.fromEntries(USERS.map(key => {
+        const user = current.users[key];
+        return [key, { ...user, rewardProgress: Object.fromEntries(Object.entries(user.rewardProgress)
+          .map(([activity, progress]) => [activity, { ...progress }])) }];
+      })),
       plant: {
         ...current.plant,
         historyStatusByDate: { ...current.plant.historyStatusByDate },
@@ -597,6 +701,7 @@ export const FocusState = (() => {
         // A slight device-clock skew must not replay an interval the other profile has already settled.
         freezePairing(draft, transitionTime);
         creditSleep(draft, user, transitionTime, logs);
+        rememberInterrupted(user, transitionTime);
         closeActivity(user, transitionTime, logs);
         setActivity(user, activity, transitionTime);
         return true;
@@ -635,8 +740,7 @@ export const FocusState = (() => {
         Math.min(time(now), user.plannedEndTime ?? Infinity) - user.startTime)) : 0;
     },
     targetMs(value) {
-      const rule = ruleFor(model?.users[userKey(value)]?.currentActivity);
-      return rule?.minutes ? rule.minutes * MINUTE : null;
+      return model?.users[userKey(value)]?.rewardTargetMs ?? null;
     },
     pairGroup(activity) { return ruleFor(activity)?.pairGroup ?? null; },
 
@@ -644,18 +748,26 @@ export const FocusState = (() => {
       const user = model?.users[userKey(value)];
       const rule = ruleFor(user?.currentActivity);
       const instant = time(now);
+      const day = today(instant);
       const nextCreditAt = rule && !rule.wakeOnly ? user.plannedEndTime : null;
-      const pairedMs = rule?.pairGroup ? pairedDuration(user, model.users[partnerOf(user)], instant) : 0;
+      const carry = rule?.wakeOnly && user.waterDate === day ? user.rewardProgress.home_sleeping
+        : nextCreditAt === null ? null : carriedIntoDeadline(user);
+      const carriedMs = carry?.elapsedMs ?? 0;
+      const target = rule?.wakeOnly ? SLEEP_TARGET_MS : user?.rewardTargetMs ?? null;
+      const pairedMs = rule?.pairGroup
+        ? pairedDuration(user, model.users[partnerOf(user)], instant) + (carry?.pairedMs ?? 0) : 0;
       return {
         category: rule?.category ?? null,
-        minutes: rule?.minutes ?? null,
+        minutes: user?.rewardTargetMs != null ? user.rewardTargetMs / MINUTE : null,
         reward: rule?.reward ?? null,
         cap: rule?.cap ?? null,
-        creditedToday: rule ? creditedOn(model.plant, user, rule.category, today(instant)) : 0,
+        creditedToday: rule ? creditedOn(model.plant, user, rule.category, day) : 0,
+        progressMs: target === null ? 0 : Math.min(target, carriedMs + Math.max(0, instant - user.startTime)),
+        carriedMs,
         remainingMs: nextCreditAt === null ? null : Math.max(0, nextCreditAt - instant),
         nextCreditAt,
         pairedMs,
-        pairedRatio: rule?.pairGroup ? Math.min(1, pairedMs / (rule.minutes * MINUTE)) : 0,
+        pairedRatio: rule?.pairGroup ? Math.min(1, pairedMs / target) : 0,
         wakeOnly: rule?.wakeOnly === true,
         sleepTiers: rule?.wakeOnly ? SLEEP_TIERS.map(tier => ({ ...tier })) : [],
       };

@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#F4F8F3">
 <title>Pocket Space: Focus &amp; Together</title>
 <link rel="stylesheet" href="./css/style.css">
-<link rel="stylesheet" href="./css/components.css?v=watering">
-<link rel="stylesheet" href="./css/modals.css?v=watering">
+<link rel="stylesheet" href="./css/components.css?v=quest-progress">
+<link rel="stylesheet" href="./css/modals.css?v=quest-progress">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -40,12 +40,9 @@
       <span class="mono" id="togetherElapsed" role="timer">0 giây</span>
     </div>
     <div class="actor-pair">
-    <section class="card actor-card" aria-labelledby="partnerName">
+    <section class="card actor-card" aria-labelledby="partnerHeading">
       <div class="actor-top">
-        <div class="actor-id">
-          <p class="kicker pink">Đối phương</p>
-          <h2 class="card-title" id="partnerName">TBV</h2>
-        </div>
+        <h2 class="actor-id card-title" id="partnerHeading"><span class="kicker pink">Đối phương</span> <span id="partnerName">TBV</span></h2>
         <div class="actor-readout">
           <p id="partnerActivity" class="actor-activity">Nghỉ ngơi</p>
           <p id="partnerElapsed" class="actor-elapsed mono">—</p>
@@ -60,9 +57,9 @@
       </div>
     </section>
 
-    <section class="card actor-card" aria-labelledby="ownName">
+    <section class="card actor-card" aria-labelledby="ownHeading">
       <div class="actor-top">
-        <div class="actor-id"><p class="kicker green">Bạn</p><h2 class="card-title" id="ownName">PPA</h2></div>
+        <h2 class="actor-id card-title" id="ownHeading"><span class="kicker green">Bạn</span> <span id="ownName">PPA</span></h2>
         <div class="actor-readout">
           <p id="ownActivity" class="actor-activity">Nghỉ ngơi</p>
           <p id="ownElapsed" class="actor-elapsed mono">—</p>
@@ -78,7 +75,7 @@
     </section>
     </div>
 
-    <button type="button" id="historyButton" class="history-button line between" aria-haspopup="dialog">
+    <button type="button" id="historyButton" class="history-button line between" aria-haspopup="dialog" aria-controls="historyDialog">
       <span class="line"><svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 2h2V0h2v2h4V0h2v2h2v2h1v10h-1v1H2v-1H1V4h1zm1 4v7h10V6zm2 2h2v2H5zm4 0h2v2H9z"></path></svg>Lịch sử hoạt động 24h</span>
       <span class="history-arrow" aria-hidden="true">›</span>
     </button>
@@ -86,7 +83,7 @@
     <button class="card quest-open" id="questOpen" type="button" aria-haspopup="dialog" aria-controls="questDrawer">
       <span>Side Quests Hàng Ngày 📋</span>
       <span class="quest-summary-right">
-        <span id="questCount" class="quest-count mono">0/7</span>
+        <span id="questCount" class="quest-count mono">0/8</span>
         <span class="quest-chevron" aria-hidden="true">›</span>
       </span>
     </button>
@@ -169,7 +166,7 @@
   <strong id="questFeedbackText"></strong>
 </aside>
 
-<dialog class="quest-drawer" id="questDrawer" aria-labelledby="questHeading">
+<dialog class="bottom-drawer quest-drawer" id="questDrawer" aria-labelledby="questHeading">
   <header class="dialog-title line between">
     <div><p class="kicker">Nhiệm vụ chung và cá nhân</p><h2 id="questHeading">Side Quests Hàng Ngày</h2></div>
     <button class="icon-button" id="questClose" type="button" aria-label="Đóng nhiệm vụ">×</button>
@@ -255,14 +252,15 @@
   <p id="rulesStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/21 ngày đủ nước</p>
   <ul class="rule-list" id="plantRules">
     <li><strong>Tưới bonsai.</strong> Hoàn thành hoạt động hoặc nhiệm vụ để nhận giọt nước. Chạm vào cây để tưới toàn bộ số giọt bạn đang có. Chỉ nước đã tưới mới tính vào mục tiêu ngày.</li>
-    <li><strong>Ngủ.</strong> Khi kết thúc giấc ngủ, nhận 10 giọt nếu ngủ từ 8 giờ, 5 giọt nếu ngủ từ 7 đến dưới 8 giờ. Dưới 7 giờ không nhận giọt nào.</li>
-    <li><strong>Học hoặc đọc.</strong> 8 giọt mỗi 30 phút, tối đa 16 giọt mỗi ngày.</li>
-    <li><strong>Tập trung làm việc.</strong> 6 giọt mỗi 25 phút, tối đa 24 giọt mỗi ngày.</li>
-    <li><strong>Chạy bộ hoặc tập gym.</strong> Đủ 30 phút nhận 10 giọt. Hai hoạt động dùng chung một lượt mỗi ngày.</li>
-    <li><strong>Nấu ăn hoặc dọn dẹp.</strong> Đủ 20 phút nhận 4 giọt. Hai hoạt động dùng chung một lượt mỗi ngày.</li>
-    <li><strong>Dùng bữa.</strong> Đủ 20 phút nhận 4 giọt, mỗi lượt dùng bữa nhận thưởng một lần.</li>
+    <li><strong>Thời gian cộng dồn.</strong> Các phiên của cùng một hoạt động cộng phút trong ngày. Khi đủ mốc, giọt thưởng vào kho của bạn. Phần phút còn dở từ các phiên đã kết thúc đặt lại lúc 00:00.</li>
+    <li><strong>Ngủ.</strong> Tính khi thức dậy theo tổng thời lượng các giấc ngủ kết thúc trong ngày. Đủ 7 giờ nhận 5 giọt, đủ 8 giờ nhận tổng cộng 10 giọt.</li>
+    <li><strong>Học hoặc đọc.</strong> 8 giọt mỗi 80 phút, tối đa 24 giọt mỗi ngày.</li>
+    <li><strong>Tập trung làm việc.</strong> 6 giọt mỗi 70 phút, tối đa 36 giọt mỗi ngày.</li>
+    <li><strong>Chạy bộ và tập gym.</strong> Chạy 30 phút hoặc tập gym 20 phút nhận 10 giọt, chung trần 20 giọt mỗi ngày.</li>
+    <li><strong>Nấu ăn và dọn dẹp.</strong> Nấu 20 phút hoặc dọn 60 phút nhận 4 giọt, chung trần 8 giọt mỗi ngày.</li>
+    <li><strong>Dùng bữa.</strong> Có đồng hồ và lịch sử hoạt động, 0 giọt thưởng.</li>
     <li><strong>Thư giãn hoặc dùng điện thoại.</strong> Không nhận nước tưới.</li>
-    <li><strong>Focus Cùng Nhau.</strong> Khi hai phiên làm việc hoặc hai phiên học trùng ít nhất 80% thời lượng của phiên, thưởng tăng 20%, làm tròn lên và tính trong giới hạn ngày.</li>
+    <li><strong>Focus Cùng Nhau.</strong> Khi hai bạn cùng học hoặc cùng làm việc trong ít nhất 80% thời lượng của một mốc thưởng, số giọt tăng 20%, làm tròn lên trong giới hạn ngày.</li>
     <li>Mục tiêu ở năm giai đoạn lần lượt là 40, 55, 70, 85 và 100 giọt. Ngày chốt lúc 00:00 giờ Việt Nam. Đủ 21 ngày tích lũy, cây lớn thêm một giai đoạn. Sang ngày mới, cả nước chưa tưới và bộ đếm đã tưới về 0.</li>
     <li>Mốc 7 và 14 ngày mở chồi mới và một khiên. Có thể giữ một khiên. Khi thiếu nước, khiên tự dùng để giữ tiến độ. Cây vẫn héo.</li>
     <li>Mỗi ngày thiếu nước khi hết khiên trừ 5 ngày tích lũy. Sau mỗi ba ngày thiếu nước liên tiếp, cây lùi một giai đoạn và tiến độ trở về 0. Giai đoạn thấp nhất là mầm hạt.</li>
@@ -298,7 +296,7 @@
   <div id="dock"></div>
 </dialog>
 
-<dialog class="history-dialog" id="historyDialog" aria-labelledby="historyHeading">
+<dialog class="bottom-drawer history-dialog" id="historyDialog" aria-labelledby="historyHeading">
   <header class="dialog-title line between">
     <div><p class="kicker">Hai nhịp ngày</p><h2 id="historyHeading">Lịch sử hoạt động</h2></div>
     <button class="icon-button" type="button" id="historyClose" aria-label="Đóng lịch sử">×</button>
@@ -317,6 +315,6 @@
   </div>
   <p id="historyDetail" class="small muted" role="status"></p>
 </dialog>
-<script type="module" src="./js/app.js?v=home-scenes"></script>
+<script type="module" src="./js/app.js?v=quest-progress"></script>
 </body>
 </html>

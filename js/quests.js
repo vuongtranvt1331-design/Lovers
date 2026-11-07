@@ -1,5 +1,5 @@
-import { DAILY_QUESTS } from "./catalog.js?v=home-scenes";
-import { FocusState } from "./state.js?v=home-scenes";
+import { DAILY_QUESTS } from "./catalog.js?v=quest-progress";
+import { FocusState } from "./state.js?v=quest-progress";
 import { AudioEngine } from "./audio.js";
 
 const questRoot = new URL("../assets/quests/", import.meta.url);
@@ -119,6 +119,14 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
       const button = document.createElement("button");
       button.type = "button";
       button.className = "button quest-claim";
+      if (quest.hint) {
+        const hint = document.createElement("span");
+        hint.id = "quest-hint-" + quest.id;
+        hint.className = "muted";
+        hint.textContent = quest.hint;
+        title.append(document.createElement("br"), hint);
+        button.setAttribute("aria-describedby", hint.id);
+      }
       button.addEventListener("click", () => void claimQuest(quest));
       card.append(image, title, reward, button);
       ui.questGrid.append(card);

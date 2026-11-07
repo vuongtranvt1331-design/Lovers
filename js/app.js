@@ -1,9 +1,9 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS } from "./catalog.js?v=home-scenes";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS } from "./catalog.js?v=quest-progress";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=home-scenes";
-import { FocusState } from "./state.js?v=home-scenes";
-import { Timeline } from "./timeline.js?v=home-scenes";
-import { createQuestDrawer } from "./quests.js?v=home-scenes";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=quest-progress";
+import { FocusState } from "./state.js?v=quest-progress";
+import { Timeline } from "./timeline.js?v=quest-progress";
+import { createQuestDrawer } from "./quests.js?v=quest-progress";
 import { PocketDB } from "./db.js";
 import { offsetDay } from "./gameTime.js";
 
@@ -407,6 +407,8 @@ const FocusUI = (() => {
     ui.partnerName.textContent = names[partner()];
     ui.ownActivity.textContent = ACTIVITY_TITLES.get(own.currentActivity);
     ui.partnerActivity.textContent = ACTIVITY_TITLES.get(other.currentActivity);
+    ui.ownActivity.title = ui.ownActivity.textContent;
+    ui.partnerActivity.title = ui.partnerActivity.textContent;
     ui.choosePPA.setAttribute("aria-pressed", String(profile === "ppa"));
     ui.chooseTBV.setAttribute("aria-pressed", String(profile === "tbv"));
     ui.messageInput.setAttribute("aria-label", "Tin nhắn gửi " + names[partner()]);
@@ -433,19 +435,24 @@ const FocusUI = (() => {
     }
   }
 
-  function renderTimer() {
-    const info = FocusState.rewardInfo(profile);
+  function renderTimer(now = Date.now()) {
+    const info = FocusState.rewardInfo(profile, now);
+    let label;
     if (ownStartTime == null) {
-      ui.timerStatus.textContent = "Chọn một hoạt động để bắt đầu phiên.";
+      label = "Chọn một hoạt động để bắt đầu phiên.";
     } else if (!info.category) {
-      ui.timerStatus.textContent = "Hoạt động này không nhận nước tưới.";
-    } else if (info.wakeOnly) {
-      ui.timerStatus.textContent = "Khi thức dậy · đủ 7 giờ +5 giọt · đủ 8 giờ +10 giọt.";
+      label = "Hoạt động này không nhận nước tưới.";
     } else if (info.cap != null && info.creditedToday >= info.cap) {
-      ui.timerStatus.textContent = "Đã nhận đủ " + info.cap + " giọt cho nhóm này hôm nay.";
+      label = "Đã nhận đủ " + info.cap + " giọt cho nhóm này hôm nay.";
+    } else if (info.wakeOnly) {
+      label = "Tính khi thức dậy · 7 giờ +5 giọt · 8 giờ đủ 10 giọt.";
+      if (info.carriedMs > 0) label = "Đã tích " + elapsed(info.carriedMs) + " ngủ · " + label;
     } else {
-      ui.timerStatus.textContent = "Đủ " + info.minutes + " phút sẽ nhận " + info.reward + " giọt để tưới cây.";
+      const progress = Math.floor((info.progressMs ?? 0) / 60000);
+      const reward = Math.min(info.reward, (info.cap ?? Infinity) - info.creditedToday);
+      label = progress + "/" + info.minutes + " phút tích lũy · +" + reward + " giọt khi đủ.";
     }
+    if (ui.timerStatus.textContent !== label) ui.timerStatus.textContent = label;
   }
 
   function render() {
@@ -683,6 +690,7 @@ const FocusUI = (() => {
     if (document.hidden) return;
     labelDate(now);
     renderClocks(now);
+    renderTimer(now);
     if (FocusState.today(now) !== plantRenderDay) {
       renderPlant(now);
       if (ui.rulesDialog.open) renderWaterHistory();

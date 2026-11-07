@@ -16,6 +16,7 @@ export const ACTIVITY_GROUPS = [
   ["Ngoài trời", [
     ["out_walking", "Đi bộ", "◇"], ["out_running", "Chạy bộ", "➜"],
     ["out_gym", "Tập tạ", "✚"], ["out_errand", "Ghé cửa hàng", "▦"],
+    ["out_going_to_school", "Đi học", "🎒"],
     ["out_heading_home", "Về nhà lúc chạng vạng", "⌂"],
   ]],
   ["Đi chơi & đi xa", [
@@ -38,6 +39,7 @@ export const DAILY_QUESTS = [
   { id: "early_shower", title: "Tắm sớm", icon: "🫧", reward: 1 },
   { id: "drink_water", title: "Uống nước ấm", icon: "🍵", reward: 1 },
   { id: "clean_desk", title: "Dọn bàn sạch sẽ", icon: "✨", reward: 1 },
+  { id: "fresh_air", title: "Ra ngoài hít thở", icon: "🌿", reward: 1, hint: "Ở ngoài trời ít nhất 5 phút." },
   { id: "hug_5s", title: "Ôm nhau 5 giây", icon: "🤗", reward: 2, pair: true },
   { id: "tbv_kiss_ppa", title: "TBV thơm má PPA", icon: "💋", reward: 2, pair: true },
   { id: "ppa_kiss_tbv", title: "PPA thơm má TBV", icon: "💋", reward: 2, pair: true },
