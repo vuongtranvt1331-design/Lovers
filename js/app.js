@@ -2,13 +2,14 @@ import {
   ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS,
   STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO,
   DAILY_WATER_MAX_PER_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
-} from "./catalog.js?v=bonsai-balance";
+} from "./catalog.js?v=notes-board";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=bonsai-balance";
-import { FocusState } from "./state.js?v=bonsai-balance";
-import { Timeline } from "./timeline.js?v=bonsai-balance";
-import { createQuestDrawer } from "./quests.js?v=bonsai-balance";
-import { PocketDB } from "./db.js";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=notes-board";
+import { FocusState } from "./state.js?v=notes-board";
+import { Timeline } from "./timeline.js?v=notes-board";
+import { createQuestDrawer } from "./quests.js?v=notes-board";
+import { createNotesDrawer } from "./notes.js?v=notes-board";
+import { PocketDB } from "./db.js?v=notes-board";
 import { offsetDay } from "./gameTime.js";
 
 const FocusUI = (() => {
@@ -27,7 +28,7 @@ const FocusUI = (() => {
     "partnerDialog", "partnerClose", "messageForm", "messageInput", "quickActions", "ownCanvas",
     "ownPoke", "ownName", "ownActivity", "ownElapsed", "ownEffects", "timerStatus", "activityDialog", "activityClose", "dock",
     "historyButton", "historyDialog", "historyClose", "appStatus", "togetherStatus", "togetherElapsed", "plant",
-    "questDrawer", "questOpen", "questClose",
+    "questDrawer", "questOpen", "questClose", "notesOpen",
     "topBar", "syncStatus", "syncButton",
     "coupleQuestDialog", "coupleQuestClose", "coupleQuestText", "coupleQuestAccept", "coupleQuestDecline",
   ].map(id => [id, byId(id)]));
@@ -54,6 +55,7 @@ const FocusUI = (() => {
   let connectionStatus = "connecting";
   const canAct = () => connectionStatus === "online";
   const quests = createQuestDrawer(() => profile, commit, canAct, showCoupleQuest);
+  const notes = createNotesDrawer(() => profile, canAct);
   let syncing = false;
   let pouring = false;
   let lastDay = "";
@@ -672,6 +674,7 @@ const FocusUI = (() => {
       }
     }
     if (status === "online") ui.appStatus.textContent = "";
+    if (status !== previousStatus) notes.connectionChanged();
     render();
     if (adopted) void Timeline.refresh();
     if (status === "online" && (!raw || previousStatus !== "online"
@@ -732,6 +735,7 @@ const FocusUI = (() => {
     const now = Date.now();
     Timeline.watchClock(now);
     if (document.hidden) return;
+    notes.watchClock(now);
     labelDate(now);
     renderClocks(now);
     renderTimer(now);
@@ -798,6 +802,7 @@ const FocusUI = (() => {
     renderPlantRules();
     buildDock();
     quests.mount();
+    notes.mount();
     for (let index = 0; index < streakGoal; index++) {
       const dot = document.createElement("span");
       dot.className = "streak-dot";
@@ -836,6 +841,7 @@ const FocusUI = (() => {
     });
     ui.questOpen.addEventListener("click", () => { openDialog(ui.questDrawer); quests.render(); });
     ui.questClose.addEventListener("click", () => ui.questDrawer.close());
+    ui.notesOpen.addEventListener("click", () => void notes.open());
     ui.syncButton.addEventListener("click", async () => {
       ui.syncButton.disabled = true;
       try {

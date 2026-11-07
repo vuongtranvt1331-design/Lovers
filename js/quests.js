@@ -1,5 +1,5 @@
-import { DAILY_QUESTS } from "./catalog.js?v=bonsai-balance";
-import { FocusState } from "./state.js?v=bonsai-balance";
+import { DAILY_QUESTS } from "./catalog.js?v=notes-board";
+import { FocusState } from "./state.js?v=notes-board";
 import { AudioEngine } from "./audio.js";
 
 const questRoot = new URL("../assets/quests/", import.meta.url);

@@ -1,6 +1,6 @@
 # Pocket Space · đồng bộ công khai
 
-Ứng dụng mở trực tiếp. Chọn PPA hoặc TBV ở đầu trang để dùng hồ sơ tương ứng. Ai mở trang cũng có thể đọc dữ liệu chung và thực hiện thao tác của cả hai hồ sơ. Dữ liệu hoạt động, nước và tin nhắn dùng chung qua Firestore.
+Ứng dụng mở trực tiếp. Chọn PPA hoặc TBV ở đầu trang để dùng hồ sơ tương ứng. Ai mở trang cũng có thể đọc dữ liệu chung và thực hiện thao tác của cả hai hồ sơ. Hoạt động, nước, tin nhắn và ghi chú dùng chung qua Firestore.
 
 ## 1. Cấu hình Firestore
 
@@ -12,7 +12,7 @@ Từ thư mục bản Git Lovers, người quản trị Firebase có thể công
 
 Nếu dự án có thêm ứng dụng khác, kiểm tra và hợp nhất quy tắc của các ứng dụng trước khi công bố.
 
-Công bố bộ quy tắc này trước khi đưa bản mục tiêu nước theo ngày lên Pages. Sau khi dữ liệu chuyển sang bản mới, quy tắc bảo vệ mục tiêu nước, kho nước, dấu đã làm nhiệm vụ và phút tích lũy trước thao tác ghi từ tab còn mở bản cũ. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
+Công bố bộ quy tắc này trước khi đưa Sổ ghi chú đôi lên Pages. Bộ quy tắc cấp quyền cho cả hai hồ sơ sử dụng sổ của nhau và bảo vệ dữ liệu các ngày đã chốt. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
 
 ## 2. Đưa mã lên GitHub Pages
 
@@ -45,4 +45,5 @@ Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic vớ
 - Phút của các phiên ngắn được cộng theo từng hoạt động trong ngày. Khi đủ mốc, lượt thưởng và số giọt được ghi trong cùng một giao dịch.
 - pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
 - pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
+- pocket_space/notes_state/days lưu danh sách ghi chú theo hồ sơ và ngày. Việc còn dở được chuyển vào ngày hiện tại khi mở lại sổ. Danh sách của ngày trước giữ kết quả đã chốt.
 - Firestore giữ dữ liệu đã đọc khi mất mạng. Thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Lịch sử IndexedDB của bản cũ vẫn ở trình duyệt gốc.

@@ -87,6 +87,7 @@ function context() {
       users: Object.fromEntries(roles.map(role => [role, fs.doc(db, 'pocket_space', 'user_' + role)])),
       interactions: fs.collection(db, 'pocket_space', 'live_interactions', 'events'),
       logs: fs.collection(db, 'pocket_space', 'activity_history', 'logs'),
+      noteDays: fs.collection(db, 'pocket_space', 'notes_state', 'days'),
     };
     const client = { fs, db, refs };
     listenRoom(client);
@@ -331,6 +332,179 @@ async function historyDay(dateStr) {
   throw dbError('history-not-cached', 'Ngày này chưa tải đủ dữ liệu để xem ngoại tuyến.');
 }
 
+const NOTE_LIMIT = 300;
+const NOTE_LENGTH = 240;
+const NOTE_ROLLOVER_PAGE = 16;
+let noteRollover;
+
+function noteDayId(owner, date) {
+  if (!roles.includes(owner) || dateStart(date) === null) {
+    throw dbError('invalid-argument', 'Hồ sơ hoặc ngày ghi chú không hợp lệ.');
+  }
+  return owner + '_' + date;
+}
+
+function openNoteDay(owner, date, previous) {
+  return { owner, date, tasks: { ...previous?.tasks }, doneIds: [...(previous?.doneIds ?? [])], pendingDay: date };
+}
+
+function noteSnapshot(owner, date, snapshot) {
+  const raw = snapshot.data();
+  const doneIds = new Set(raw?.doneIds ?? []);
+  const tasks = Object.entries(raw?.tasks ?? {}).filter(([, item]) => typeof item?.text === 'string')
+    .map(([id, { text, createdAt, carriedFromDate }]) => ({ id, text, done: doneIds.has(id), createdAt,
+      ...(carriedFromDate ? { carriedFromDate } : {}) }))
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id));
+  return { owner, date, tasks, archived: Boolean(raw?.archivedTo) || date < today(), fromCache: snapshot.metadata.fromCache };
+}
+
+function subscribeNotes(owner, date, onChange, onError = () => {}) {
+  const id = noteDayId(owner, date);
+  let active = true;
+  let unsubscribe;
+  const fail = error => { if (active) onError(error); };
+  void context().then(({ fs, refs }) => {
+    if (!active) return;
+    unsubscribe = fs.onSnapshot(fs.doc(refs.noteDays, id), { includeMetadataChanges: true }, snapshot => {
+      if (active && !snapshot.metadata.hasPendingWrites) onChange(noteSnapshot(owner, date, snapshot));
+    }, fail);
+  }).catch(fail);
+  return () => { active = false; unsubscribe?.(); };
+}
+
+function validateNoteTaskId(id) {
+  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) {
+    throw dbError('invalid-argument', 'Mục ghi chú không hợp lệ.');
+  }
+}
+
+function checkNoteCapacity(tasks) {
+  if (Object.keys(tasks).length > NOTE_LIMIT) {
+    throw dbError('resource-exhausted', 'Ngày này đã có quá nhiều mục ghi chú. Hãy xóa bớt mục để tiếp tục.');
+  }
+}
+
+async function mutateNoteDay(owner, date, change) {
+  const id = noteDayId(owner, date);
+  if (date < today()) throw dbError('failed-precondition', 'Ghi chú ngày đã qua chỉ có thể xem.');
+  const { fs, db, refs } = await context();
+  requireOnline();
+  const ref = fs.doc(refs.noteDays, id);
+  return fs.runTransaction(db, async transaction => {
+    const previous = (await transaction.get(ref)).data();
+    if (date < today() || previous?.archivedTo) {
+      throw dbError('failed-precondition', 'Ghi chú ngày đã qua chỉ có thể xem.');
+    }
+    const draft = openNoteDay(owner, date, previous);
+    const result = change(draft);
+    if (!result) return false;
+    checkNoteCapacity(draft.tasks);
+    transaction.set(ref, { ...draft, updatedAt: fs.serverTimestamp() });
+    return result;
+  });
+}
+
+async function addNote(owner, date, text) {
+  const body = typeof text === 'string' ? text.trim() : '';
+  if (!body || body.length > NOTE_LENGTH) {
+    throw dbError('invalid-argument', 'Ghi chú cần có từ 1 đến ' + NOTE_LENGTH + ' ký tự.');
+  }
+  const { fs, refs } = await context();
+  const id = fs.doc(refs.noteDays).id;
+  const createdAt = Date.now();
+  return mutateNoteDay(owner, date, draft => {
+    draft.tasks[id] = { text: body, createdAt };
+    return id;
+  });
+}
+
+async function setNoteDone(owner, date, id, done) {
+  validateNoteTaskId(id);
+  if (typeof done !== 'boolean') throw dbError('invalid-argument', 'Trạng thái ghi chú không hợp lệ.');
+  return mutateNoteDay(owner, date, draft => {
+    if (!Object.hasOwn(draft.tasks, id) || draft.doneIds.includes(id) === done) return false;
+    draft.doneIds = done ? [...draft.doneIds, id] : draft.doneIds.filter(value => value !== id);
+    return true;
+  });
+}
+
+async function removeNote(owner, date, id) {
+  validateNoteTaskId(id);
+  return mutateNoteDay(owner, date, draft => {
+    if (!Object.hasOwn(draft.tasks, id)) return false;
+    delete draft.tasks[id];
+    draft.doneIds = draft.doneIds.filter(value => value !== id);
+    return true;
+  });
+}
+
+async function archiveNotePage({ fs, db, refs }, page, date) {
+  return fs.runTransaction(db, async transaction => {
+    const sources = (await Promise.all(page.docs.map(item => transaction.get(item.ref))))
+      .flatMap(item => {
+        const raw = item.data();
+        if (!raw?.pendingDay || raw.pendingDay >= date) return [];
+        if (raw.pendingDay !== raw.date || noteDayId(raw.owner, raw.date) !== item.id) {
+          throw dbError('data-loss', 'Không thể đọc bản ghi chú cũ.');
+        }
+        const done = new Set(raw.doneIds);
+        const incomplete = Object.entries(raw.tasks).filter(([id]) => !done.has(id));
+        return [{ ref: item.ref, raw, incomplete }];
+      });
+    const owners = new Set(sources.filter(item => item.incomplete.length).map(item => item.raw.owner));
+    const destinations = new Map(await Promise.all([...owners].map(async owner => {
+      const ref = fs.doc(refs.noteDays, noteDayId(owner, date));
+      const previous = (await transaction.get(ref)).data();
+      return [owner, { ref, draft: openNoteDay(owner, date, previous), changed: false }];
+    })));
+    for (const { raw, incomplete } of sources) {
+      const destination = destinations.get(raw.owner);
+      for (const [id, task] of incomplete) {
+        if (Object.hasOwn(destination.draft.tasks, id)) continue;
+        destination.draft.tasks[id] = { ...task, carriedFromDate: raw.date };
+        destination.changed = true;
+      }
+    }
+    for (const { ref, draft, changed } of destinations.values()) {
+      if (!changed) continue;
+      checkNoteCapacity(draft.tasks);
+      transaction.set(ref, { ...draft, updatedAt: fs.serverTimestamp() });
+    }
+    for (const { ref, raw } of sources) {
+      const { owner, tasks, doneIds } = raw;
+      transaction.set(ref, { owner, date: raw.date, tasks, doneIds, archivedTo: date, updatedAt: fs.serverTimestamp() });
+    }
+    return sources.length;
+  });
+}
+
+async function catchUpNotes() {
+  const client = await context();
+  const { fs, refs } = client;
+  let archived = 0;
+  for (;;) {
+    requireOnline();
+    const date = today();
+    const query = fs.query(refs.noteDays, fs.where('pendingDay', '<', date), fs.limit(NOTE_ROLLOVER_PAGE));
+    const page = await fs.getDocsFromServer(query);
+    if (page.empty && date === today()) return archived;
+    if (date !== today()) continue;
+    try {
+      archived += await archiveNotePage(client, page, date);
+    } catch (error) {
+      if (date !== today()) continue;
+      if (!['permission-denied', 'already-exists'].includes(error.code)) throw error;
+      const latest = new Set((await fs.getDocsFromServer(query)).docs.map(item => item.id));
+      if (page.docs.every(item => latest.has(item.id))) throw error;
+    }
+  }
+}
+
+function rolloverNotes() {
+  noteRollover ??= catchUpNotes().finally(() => { noteRollover = undefined; });
+  return noteRollover;
+}
+
 export const PocketDB = {
   async start() { await context(); },
   async reconnect() {
@@ -344,4 +518,5 @@ export const PocketDB = {
   },
   mutate,
   historyDay,
+  notes: { subscribe: subscribeNotes, add: addNote, setDone: setNoteDone, remove: removeNote, rollover: rolloverNotes },
 };

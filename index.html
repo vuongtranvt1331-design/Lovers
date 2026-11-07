@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#F4F8F3">
-<title>Pocket Space: Focus &amp; Together</title>
+<title>Pocket Space</title>
 <link rel="stylesheet" href="./css/style.css">
-<link rel="stylesheet" href="./css/components.css?v=quest-progress">
+<link rel="stylesheet" href="./css/components.css?v=notes-board">
 <link rel="stylesheet" href="./css/modals.css?v=bonsai-balance">
+<link rel="stylesheet" href="./css/notes.css?v=notes-board">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <div class="shell">
-  <header class="top line between" id="topBar" data-connection="connecting">
+  <header class="top" id="topBar" data-connection="connecting">
     <div class="top-title">
       <h1>Pocket Space</h1>
-      <p class="kicker">Focus &amp; Together</p>
       <p class="date-line small muted" id="appDate">Hôm nay</p>
     </div>
     <button type="button" class="streak-badge" id="streakBadge" aria-controls="plant" aria-describedby="streakShortcutLabel syncStatus" title="Đến khu vườn bonsai">
@@ -75,18 +75,21 @@
     </section>
     </div>
 
-    <button type="button" id="historyButton" class="history-button line between" aria-haspopup="dialog" aria-controls="historyDialog">
-      <span class="line"><svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 2h2V0h2v2h4V0h2v2h2v2h1v10h-1v1H2v-1H1V4h1zm1 4v7h10V6zm2 2h2v2H5zm4 0h2v2H9z"></path></svg>Lịch sử hoạt động 24h</span>
-      <span class="history-arrow" aria-hidden="true">›</span>
-    </button>
-
-    <button class="card quest-open" id="questOpen" type="button" aria-haspopup="dialog" aria-controls="questDrawer">
-      <span>Side Quests Hàng Ngày 📋</span>
-      <span class="quest-summary-right">
-        <span id="questCount" class="quest-count mono">0/8</span>
-        <span class="quest-chevron" aria-hidden="true">›</span>
-      </span>
-    </button>
+    <nav class="quick-tools" aria-label="Công cụ hằng ngày">
+      <button class="quick-tool" id="historyButton" type="button" aria-haspopup="dialog" aria-controls="historyDialog" aria-label="Lịch sử hoạt động 24h">
+        <span>24h</span>
+        <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 2h2V0h2v2h4V0h2v2h2v2h1v10h-1v1H2v-1H1V4h1zm1 4v7h10V6zm2 2h2v2H5zm4 0h2v2H9z"></path></svg>
+      </button>
+      <button class="quick-tool" id="questOpen" type="button" aria-haspopup="dialog" aria-controls="questDrawer" aria-describedby="questCount">
+        <span>Quests</span>
+        <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 1h6v2h3v12H2V3h3zm-1 4v8h8V5h-1v1H5V5zm2 3h4v1H6zm0 2h4v1H6z"></path></svg>
+      </button>
+      <button class="quick-tool" id="notesOpen" type="button" aria-haspopup="dialog" aria-controls="notesDrawer">
+        <span>Notes</span>
+        <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h10v1h1v12h-1v1H3v-2H1v-2h2V9H1V7h2V5H1V3h2zm2 2v10h7V3zm2 2h3v1H7zm0 3h3v1H7z"></path></svg>
+      </button>
+      <span id="questCount" class="sr-only">0/8</span>
+    </nav>
 
     <section class="card" id="plant" aria-labelledby="plantHeading" tabindex="-1">
       <div class="plant-head line between">
@@ -317,6 +320,35 @@
   </div>
   <p id="historyDetail" class="small muted" role="status"></p>
 </dialog>
-<script type="module" src="./js/app.js?v=bonsai-balance"></script>
+
+<dialog id="notesDrawer" class="bottom-drawer notes-drawer" aria-label="Sổ ghi chú đôi">
+  <nav class="notes-days" id="notesDays" aria-label="Lịch ghi chú">
+    <button class="notes-arrow" id="notesPrev" type="button" aria-label="Ngày trước">‹</button>
+    <button class="notes-date" id="notesPreviousDate" type="button"></button>
+    <button class="notes-avatar" id="notesPPA" type="button" aria-label="Sổ của PPA" aria-pressed="false"><img src="./assets/notes/ppa.png" alt="" width="28" height="28"></button>
+    <button class="notes-date notes-center-date" id="notesCenterDate" type="button"></button>
+    <button class="notes-avatar" id="notesTBV" type="button" aria-label="Sổ của TBV" aria-pressed="false"><img src="./assets/notes/tbv.png" alt="" width="28" height="28"></button>
+    <button class="notes-date" id="notesNextDate" type="button"></button>
+    <button class="notes-arrow" id="notesNext" type="button" aria-label="Ngày sau">›</button>
+  </nav>
+  <div id="notesDateFallback" class="notes-date-fallback" hidden>
+    <label for="notesDatePicker" class="sr-only">Ngày ghi chú</label>
+    <input id="notesDatePicker" type="date">
+    <button class="button" id="notesDateApply" type="button">Đến ngày</button>
+  </div>
+  <p id="notesStatus" class="notes-status" role="status" hidden></p>
+  <div class="notes-scroll" id="notesScroll" tabindex="0" aria-label="Danh sách ghi chú">
+    <ul class="notes-list" id="notesList" aria-label="Việc trong ngày"></ul>
+  </div>
+  <footer class="notes-footer">
+    <form class="notes-compose" id="notesCompose">
+      <label for="notesInput" class="sr-only">Việc cần làm</label>
+      <input id="notesInput" type="text" maxlength="100" autocomplete="off" placeholder="Thêm một việc…" required>
+      <button class="button primary" id="notesAdd" type="submit">Thêm</button>
+    </form>
+    <button class="icon-button" id="notesClose" type="button" aria-label="Đóng sổ ghi chú">×</button>
+  </footer>
+</dialog>
+<script type="module" src="./js/app.js?v=notes-board"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=bonsai-balance";
-import { CanvasRenderer } from "./canvasRenderer.js?v=bonsai-balance";
-import { FocusState } from "./state.js?v=bonsai-balance";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=notes-board";
+import { CanvasRenderer } from "./canvasRenderer.js?v=notes-board";
+import { FocusState } from "./state.js?v=notes-board";
 import { DAY_MS, dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
 
 export const Timeline = (() => {

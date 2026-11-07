@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { ACTIVITY_TITLES, BALANCE_VERSION, DAILY_WATER_MAX, DAILY_WATER_MAX_PER_PROFILE, spriteURL,
   STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO, STAGE_TARGETS } from '../js/catalog.js';
-import { PocketDB, splitLog } from '../js/db.js';
+import { PocketDB, splitLog } from '../js/db.js?v=notes-board';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, today } from '../js/gameTime.js';
 import { FocusState } from '../js/state.js';
 import { FocusState as PeerState } from '../js/state.js?peer';

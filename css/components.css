@@ -18,68 +18,43 @@
 
 .top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   column-gap: clamp(5px, 1.75vw, 8px);
-  padding: max(12px, env(safe-area-inset-top)) 0 12px;
+  padding: max(8px, env(safe-area-inset-top)) 0 8px;
   border-bottom: 1px solid var(--edge);
-  margin-bottom: 11px;
+  margin-bottom: 8px;
 }
 .top-title { min-width: 0; container-type: inline-size; }
 .top h1 {
   color: var(--ink);
-  font: 700 clamp(16px, 5vw, 25px)/1.02 Georgia, "Times New Roman", serif;
-  font-size: clamp(16px, 16cqi, 26px);
+  font: 700 clamp(18px, 5vw, 25px)/1.05 Georgia, "Times New Roman", serif;
+  font-size: clamp(18px, 16cqi, 25px);
   letter-spacing: -.055em;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.top .kicker { margin-top: 3px; }
-.date-line { margin-top: 4px; overflow-wrap: anywhere; }
-.streak-badge {
-  display: inline-flex;
+.date-line { margin-top: 2px; font-size: 11px; overflow-wrap: anywhere; }
+.streak-badge, .profile-button {
   min-width: var(--tap-target);
-  min-height: var(--tap-target);
-  align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-  color: var(--moss);
-  background: #E7F3E4;
-  border: 1px solid #AECFAE;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 820;
+  padding: 4px 8px;
+  font-size: 11px;
   line-height: 1.15;
   white-space: nowrap;
 }
-.streak-badge:hover { background: #DCEFD8; border-color: #8DBB8D; }
 .streak-badge .sprig-icon { width: 11px; height: 12px; color: #52835D; }
 .top:not([data-connection="online"]) .streak-badge .sprig-icon { color: #767676; }
-.profile-button {
-  min-width: 69px;
-  min-height: 55px;
-  flex: 0 0 auto;
-  justify-self: end;
-  display: grid;
-  justify-items: center;
-  gap: 1px;
-  padding: 5px 8px;
-  color: var(--moss);
-  font-size: 10px;
-  font-weight: 850;
-  background: var(--card);
-  border: 1px solid var(--edge);
-  border-radius: 12px;
-  box-shadow: inset 0 -2px 0 #D4E4D1;
-}
-.profile-button:hover { background: #DAEAD8; }
 .profile-mark {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
   color: #B95583;
   background: var(--paper);
   border: 1px solid #D1DCCB;
-  border-radius: 7px;
+  border-radius: 6px;
 }
 .profile-mark .pixel-heart { width: 11px; }
 
@@ -481,37 +456,27 @@ body[data-together="true"] .actor-poke { border-color: #D9C3A0; }
 .button:hover:not(:disabled), .icon-button:hover:not(:disabled) { background: #F0F8ED; border-color: #7FA481; }
 .button.primary { background: var(--sprout); border-color: #79B287; color: #28442C; }
 .button.primary:hover:not(:disabled) { background: #9AF3B8; }
-.history-button {
-  width: 100%;
-  min-height: 46px;
-  padding: 7px 10px;
-  color: #544624;
-  border: 1px solid #D1BD81;
-  border-radius: 10px;
-  background: var(--butter);
-  box-shadow: inset 0 -2px 0 #F0DC9D;
-  font-weight: 825;
+.quick-tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
 }
-.history-button:hover { background: #FFF6D6; }
-.history-button svg { flex: 0 0 auto; width: 18px; height: 18px; }
-.history-button .history-arrow { font-size: 17px; }
-
-.quest-open {
-  width: 100%;
+.quick-tool, .streak-badge, .profile-button {
   display: flex;
   min-height: var(--tap-target);
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
   color: var(--ink);
+  background: var(--card);
+  box-shadow: inset 0 -2px 0 #D4E4D1;
   font-weight: 800;
-  text-align: start;
 }
-.quest-open:hover { border-color: #91B58D; }
-.quest-summary-right { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; }
-.quest-count { padding: 3px 7px; border-radius: 999px; background: var(--cream); font-size: 11px; }
-.quest-chevron { display: inline-block; font-size: 17px; line-height: 1; }
+.quick-tool { min-width: 0; padding: 4px; font-size: 13px; }
+.quick-tool:hover, .streak-badge:hover, .profile-button:hover { background: #EFF7E9; border-color: #91B58D; }
+.quick-tool svg { flex: 0 0 15px; width: 15px; height: 15px; }
 .quest-body { padding-bottom: 2px; }
 .quest-body > p { margin: 0 0 8px; }
 .quest-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
@@ -595,7 +560,6 @@ body[data-together="true"] .actor-poke { border-color: #D9C3A0; }
 
 @media (max-width: 340px) {
   .card { padding: 9px; }
-  .profile-button { min-width: 56px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .plant-poke canvas, .actor-poke canvas, .water-segment { transition-duration: 0ms; }

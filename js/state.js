@@ -1,6 +1,6 @@
 import { BALANCE_VERSION, canSelectActivity, DAILY_QUESTS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP,
-  STAGE_TARGETS, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=bonsai-balance';
-import { PocketDB } from './db.js';
+  STAGE_TARGETS, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=notes-board';
+import { PocketDB } from './db.js?v=notes-board';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, offsetDay, timestamp, today } from './gameTime.js';
 
 export const FocusState = (() => {
