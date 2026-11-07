@@ -60,6 +60,7 @@ service cloud.firestore {
       allow create: if validRoom(request.resource.data) && request.resource.data.revision == 1;
       allow update: if validRoom(request.resource.data)
         && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.plant.get('wateringVersion', 0) >= resource.data.plant.get('wateringVersion', 0)
         && historyPreserved(resource.data.plant.waterHistoryByDate,
           request.resource.data.plant.waterHistoryByDate, resource.data.plant.date)
         && historyPreserved(resource.data.plant.historyStatusByDate,

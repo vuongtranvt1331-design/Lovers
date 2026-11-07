@@ -14,6 +14,7 @@ export const FocusState = (() => {
   const STREAK_LOSS_PER_MISSED_DAY = 5;
   const MISSED_DAYS_PER_DROP = 3;
   const MAX_CATCH_UP_DAYS = 366;
+  const MANUAL_WATERING_VERSION = 1;
   const SLEEP_TIERS = [{ minutes: 420, reward: 5 }, { minutes: 480, reward: 10 }];
   const REWARDS = {
     sleep: { category: 'sleep', minutes: null, reward: null, cap: null, wakeOnly: true },
@@ -78,7 +79,10 @@ export const FocusState = (() => {
       sessionVersion: Math.max(1, bounded(raw?.sessionVersion, 1)),
       lastActivityTimestamp: timestamp(raw?.lastActivityTimestamp) ?? savedStart,
       waterDropsToday: raw?.waterDate === day ? bounded(raw.waterDropsToday, 0) : 0,
+      waterDropsAvailable: raw?.waterDate === day ? bounded(raw.waterDropsAvailable, 0) : 0,
       waterDate: day,
+      lastWateredDate: dateStart(raw?.lastWateredDate) !== null && raw.lastWateredDate <= day
+        ? raw.lastWateredDate : null,
       creditedActivityStartTime: explicitSession && raw.creditedActivityStartTime === startTime ? startTime : null,
       oneTimeRewardHandled: explicitSession && raw.oneTimeRewardHandled === true,
       pairedFocusMs: explicitSession ? bounded(raw.pairedFocusMs, 0, 30 * MINUTE) : 0,
@@ -142,6 +146,7 @@ export const FocusState = (() => {
       rewardHistoryByDate,
       dailyQuests: readDailyQuests(raw?.dailyQuests, date),
       wilted: raw?.wilted === true,
+      wateringVersion: bounded(raw?.wateringVersion, raw ? 0 : MANUAL_WATERING_VERSION),
       date,
       dropsToday: bounded(raw?.dropsToday, 0),
       targetDrops: STAGE_TARGETS.includes(raw?.targetDrops) ? raw.targetDrops : STAGE_TARGETS[currentStage - 1],
@@ -254,6 +259,7 @@ export const FocusState = (() => {
       for (const key of USERS) {
         users[key].waterDate = plant.date;
         users[key].waterDropsToday = 0;
+        users[key].waterDropsAvailable = 0;
       }
       plant.dropsToday = 0;
     }
@@ -279,8 +285,12 @@ export const FocusState = (() => {
     if (rule.cap !== null && used + waterDrops > rule.cap) return false;
     const daily = plant.rewardHistoryByDate[creditDate] ??= dayCategories();
     daily[user.id][rule.category] = used + waterDrops;
-    user.waterDropsToday += waterDrops;
-    updateTarget(draft);
+    if (plant.wateringVersion < MANUAL_WATERING_VERSION) {
+      user.waterDropsToday += waterDrops;
+      updateTarget(draft);
+    } else {
+      user.waterDropsAvailable += waterDrops;
+    }
     user.creditedActivityStartTime = user.startTime;
     const end = Math.min(deadline, start + DAY_MS);
     const entry = logInterval(user.id, user.currentActivity, start, end, (end - start) / MINUTE, 'pomodoro');
@@ -387,6 +397,8 @@ export const FocusState = (() => {
       if (user.currentActivity === IDLE) user.idleStartedAt ??= now;
     }
     settle(draft, now, logs);
+    // Finish pending legacy sessions under their original watering policy before upgrading.
+    draft.plant.wateringVersion = Math.max(draft.plant.wateringVersion, MANUAL_WATERING_VERSION);
     const result = operation ? operation(draft, logs) : undefined;
     return { draft, logs, result };
   }
@@ -495,6 +507,23 @@ export const FocusState = (() => {
       persisted = false;
     },
 
+    waterPlant(value, now = Date.now()) {
+      const key = userKey(value);
+      if (!key) return Promise.resolve(false);
+      const instant = time(now);
+      const day = today(instant);
+      return write(instant, draft => {
+        const user = draft.users[key];
+        const amount = user.waterDropsAvailable;
+        if (draft.plant.date !== day || !amount) return false;
+        user.waterDropsAvailable = 0;
+        user.waterDropsToday += amount;
+        user.lastWateredDate = day;
+        updateTarget(draft);
+        return amount;
+      }, { actor: key, action: 'waterPlant' });
+    },
+
     completeQuest(value, quest, now = Date.now()) {
       const key = userKey(value);
       const info = QUESTS.get(quest);
@@ -507,8 +536,7 @@ export const FocusState = (() => {
         const claim = quest + '_' + key;
         if (claims[claim]) return false;
         claims[claim] = true;
-        draft.users[key].waterDropsToday += info.reward;
-        updateTarget(draft);
+        draft.users[key].waterDropsAvailable += info.reward;
         return true;
       }, { actor: key, action: 'completeQuest', guard: () => true });
     },
@@ -550,8 +578,7 @@ export const FocusState = (() => {
         if (accept) {
           const claims = draft.plant.dailyQuests[day] ??= {};
           claims[claim] = true;
-          for (const user of USERS) draft.users[user].waterDropsToday += info.reward;
-          updateTarget(draft);
+          for (const user of USERS) draft.users[user].waterDropsAvailable += info.reward;
         }
         return true;
       }, { actor: key, action: 'respondToQuest', guard: () => true });

@@ -12,6 +12,8 @@ Từ thư mục bản Git Lovers, người quản trị Firebase có thể công
 
 Nếu dự án có thêm ứng dụng khác, kiểm tra và hợp nhất quy tắc của các ứng dụng trước khi công bố.
 
+Công bố bộ quy tắc này trước khi đưa bản tưới thủ công lên Pages. Sau khi dữ liệu chuyển sang bản mới, quy tắc giữ lại kho nước bằng cách chặn thao tác ghi từ các tab còn mở bản cũ. Tải lại Pocket Space trên cả hai thiết bị để tiếp tục dùng.
+
 ## 2. Đưa mã lên GitHub Pages
 
 Nhánh pocket-space-sync dựa trên main của Lovers và giữ bai-31.json hiện có. Quyền GitHub dùng để đưa mã lên repository.
@@ -39,6 +41,7 @@ Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic vớ
 ## Dữ liệu
 
 - pocket_space/plant_state chứa trạng thái chung và bản sao hai hồ sơ để đồng bộ trong cùng một snapshot.
+- Giọt nước từ hoạt động và nhiệm vụ nằm trong kho riêng của mỗi hồ sơ. Một lần tưới dùng hết kho của hồ sơ đó. Chỉ số đã tưới tính vào mục tiêu và lịch sử. Kho và tiến độ tưới của ngày đặt lại lúc 00:00 giờ Việt Nam.
 - pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
 - pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
 - Firestore giữ dữ liệu đã đọc khi mất mạng. Thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Lịch sử IndexedDB của bản cũ vẫn ở trình duyệt gốc.

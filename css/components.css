@@ -121,9 +121,17 @@
   border-radius: 10px;
   background: var(--cream);
 }
+.plant-scene {
+  --plant-height: clamp(150px, 43vw, 192px);
+  --waterer-size: clamp(128px, 46vw, 196px);
+  position: relative;
+}
 .plant-poke {
   width: 100%;
-  height: clamp(150px, 43vw, 192px);
+  height: var(--plant-height);
+}
+.plant-scene:has(.plant-waterer:not([hidden])) .plant-poke {
+  height: max(var(--plant-height), calc(var(--waterer-size) + 8px));
 }
 .plant-poke::after, .actor-poke::after {
   content: '';
@@ -145,7 +153,27 @@
   transition: transform 170ms ease;
 }
 .is-poked canvas { transform: scale(1.05); }
-.plant-scene { position: relative; }
+.plant-waterer {
+  position: absolute;
+  z-index: 1;
+  bottom: 3%;
+  width: min(var(--waterer-size), calc(50% + 15px));
+  height: auto;
+  aspect-ratio: 1;
+  pointer-events: none;
+}
+.plant-waterer-ppa { right: calc(50% - clamp(18px, 6vw, 26px)); }
+.plant-waterer-tbv { left: calc(50% - clamp(18px, 6vw, 26px)); }
+.plant-water-heart {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  left: 50%;
+  width: 14px;
+  color: #CC6797;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 .plant-growth {
   position: absolute;
   top: 0;
@@ -187,24 +215,28 @@
 .plant-scene[data-milestone="7"] .plant-poke { border-color: #94B98B; }
 .plant-scene[data-milestone="14"] .plant-poke { border-color: #C6A672; }
 .plant-milestone[data-day="14"] { color: #6B5133; background: #FAF0D9; border-color: #D7BB88; }
-.plant-help {
-  z-index: 2;
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  display: grid;
-  place-items: center;
-  width: var(--tap-target);
-  height: var(--tap-target);
-  padding: 0;
+.plant-tools { margin-top: 6px; }
+.plant-tool {
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+  padding: 3px 8px;
   color: var(--moss);
   background: #F4F8F3F5;
   border: 1px solid #AECFAE;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 11px;
   font-weight: 850;
 }
-.plant-help:hover { background: var(--butter); border-color: #D1BD81; }
+.plant-tool:hover { background: var(--butter); border-color: #D1BD81; }
+#plantHelp { font-size: 15px; }
+.plant-water-balance {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.plant-water-balance strong { color: var(--ink); }
 #plantStatus { min-height: 1.25em; margin-top: 6px; overflow-wrap: anywhere; }
 .water-panel {
   margin-top: 8px;
@@ -222,6 +254,7 @@
   font-size: 10px;
   font-weight: 740;
 }
+.plant-poured-label { margin-bottom: 3px; color: var(--moss); font-size: 11px; font-weight: 800; text-align: center; }
 .water-side { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .water-side.own { justify-content: flex-end; text-align: end; }
 .water-side strong { color: var(--ink); font-size: 12px; }

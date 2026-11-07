@@ -302,9 +302,9 @@ export const CanvasRenderer = (() => {
     return pending;
   }
 
-  function create(canvas, role) {
-    const fallback = surface(LOGICAL_SIZE, LOGICAL_SIZE);
-    const fallbackCtx = context(fallback);
+  function create(canvas, role, { transparent = false } = {}) {
+    const fallback = transparent ? null : surface(LOGICAL_SIZE, LOGICAL_SIZE);
+    const fallbackCtx = fallback && context(fallback);
     let key = role === 'plant' ? 'bonsai_01_healthy' : '';
     let sprite = null;
     let offset = 0;
@@ -315,6 +315,7 @@ export const CanvasRenderer = (() => {
 
     function frameCount() {
       if (sprite) return sprite.columns * sprite.rows;
+      if (transparent) return 1;
       if (role !== 'plant') return 6;
       return key.endsWith('_dry') ? 1 : 5;
     }
@@ -332,7 +333,7 @@ export const CanvasRenderer = (() => {
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(sheet, (index % columns) * width, Math.floor(index / columns) * height,
           width, height, 0, 0, width, height);
-      } else {
+      } else if (fallback) {
         const ctx = fittedSurface(canvas, FALLBACK_SIZE, FALLBACK_SIZE);
         rect(fallbackCtx, BACKGROUND, 0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
         if (role === 'plant') {
@@ -349,7 +350,7 @@ export const CanvasRenderer = (() => {
       lastFrame = -1;
     }
 
-    async function load(nextKey, columns, rows) {
+    async function load(nextKey, columns, rows, url = spriteURL(nextKey)) {
       if (disposed || !Number.isInteger(columns) || !Number.isInteger(rows) || columns < 1 || rows < 1) {
         return false;
       }
@@ -357,7 +358,6 @@ export const CanvasRenderer = (() => {
       key = nextKey;
       sprite = null;
       restart(latestTick);
-      const url = spriteURL(key);
       if (!url) return false;
 
       const pending = loadSheet(url);
@@ -378,6 +378,7 @@ export const CanvasRenderer = (() => {
       disposed = true;
       requestId++;
       sprite = null;
+      if (transparent) context(canvas).clearRect(0, 0, canvas.width, canvas.height);
     }
 
     return {

@@ -3,6 +3,7 @@ import { beforeEach, test } from 'node:test';
 import { PocketDB, splitLog } from '../js/db.js';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, today } from '../js/gameTime.js';
 import { FocusState } from '../js/state.js';
+import { FocusState as PeerState } from '../js/state.js?peer';
 
 const day = '2026-11-07';
 const midnight = dateStart(nextDay(day));
@@ -37,6 +38,8 @@ test('fresh profiles are idle and legacy default clocks do not earn passive rewa
     assert.equal(user.currentActivity, 'home_idle');
     assert.equal(user.startTime, null);
     assert.equal(user.sessionVersion, 1);
+    assert.equal(user.waterDropsAvailable, 0);
+    assert.equal(user.lastWateredDate, null);
   }
   assert.equal(FocusState.data.plant.dropsToday, 0);
   assert.equal(logs.length, 0);
@@ -68,6 +71,9 @@ test('an explicit meal from 23:50 to 00:10 closes once and credits the new day',
   await FocusState.refresh(midnight + 10 * MINUTE);
   assert.equal(FocusState.data.users.ppa.currentActivity, 'home_idle');
   assert.equal(FocusState.data.plant.waterHistoryByDate[day].ppa, 0);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 4);
+  assert.equal(FocusState.data.plant.waterHistoryByDate[nextDay(day)].ppa, 0);
+  assert.equal(await FocusState.waterPlant('ppa', midnight + 10 * MINUTE), 4);
   assert.equal(FocusState.data.plant.waterHistoryByDate[nextDay(day)].ppa, 4);
   const before = await FocusState.historySnapshot(day);
   const after = await FocusState.historySnapshot(nextDay(day));
@@ -87,6 +93,90 @@ test('a reward earned exactly at midnight retains its new-day ledger row', async
   assert.equal(today(midnight), nextDay(day));
   const history = await FocusState.history(nextDay(day));
   assert.equal(history.find(entry => entry.kind === 'pomodoro').awardedWater, 4);
+});
+
+test('midnight expires unpoured drops and a reward due at midnight can be poured that day', async () => {
+  const start = midnight - 20 * MINUTE;
+  await FocusState.open(start);
+  assert.equal(await FocusState.completeQuest('ppa', 'eat_veggies', start), true);
+  assert.equal(await FocusState.completeQuest('ppa', 'eat_veggies', start), false);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 1);
+  room.users.tbv.waterDropsAvailable = 41;
+  await FocusState.changeActivity('ppa', 'home_eating', start);
+  assert.equal(await FocusState.waterPlant('ppa', midnight), 4);
+  assert.equal(FocusState.data.plant.historyStatusByDate[day], 'failed');
+  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 0, tbv: 0 });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.users.ppa.waterDropsToday, 4);
+  assert.equal(FocusState.data.users.ppa.lastWateredDate, nextDay(day));
+  assert.equal(await FocusState.waterPlant('ppa', midnight - 1), false);
+});
+
+test('two tabs can pour the whole balance only once, even above the target', async () => {
+  await FocusState.open(noon);
+  room.users.ppa.waterDropsAvailable = 43;
+  room.users.tbv.waterDropsAvailable = 8;
+  room.plant.wilted = true;
+  PeerState.clearRemote();
+  assert.equal(PeerState.applyRemote(room), true);
+  const commit = PocketDB.mutate;
+  let retries = 0;
+  PocketDB.mutate = async (transform, legacy, options) => {
+    const baseline = structuredClone(room);
+    const optimistic = transform(baseline, []);
+    await Promise.resolve();
+    return commit((raw, logs) => {
+      if (raw.revision === baseline.revision) return optimistic;
+      retries++;
+      return transform(raw, logs);
+    }, legacy, options);
+  };
+  const results = await Promise.all([FocusState.waterPlant('ppa', noon), PeerState.waterPlant('ppa', noon)]);
+  assert.equal(retries, 1);
+  assert.deepEqual(results.sort((a, b) => Number(a) - Number(b)), [false, 43]);
+  assert.equal(FocusState.data.plant.dropsToday, 43);
+  assert.equal(FocusState.data.plant.wilted, false);
+  assert.equal(FocusState.data.plant.streakDays, 0);
+  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 43, tbv: 0 });
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 8);
+  FocusState.clearRemote();
+  assert.equal(FocusState.applyRemote(room), true);
+  assert.equal(FocusState.data.users.ppa.lastWateredDate, day);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.users.ppa.waterDropsToday, 43);
+  assert.equal(await FocusState.waterPlant('ppa', noon), false);
+  await FocusState.refresh(midnight);
+  assert.equal(FocusState.data.users.ppa.lastWateredDate, day);
+  assert.equal(FocusState.data.users.ppa.waterDropsToday, 0);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.plant.streakDays, 1);
+  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 43, tbv: 0 });
+});
+
+test('old automatic contributions survive upgrade without marking a manual pour', async () => {
+  const previous = '2026-11-06';
+  room.plant = {
+    date: day, currentStage: 1, targetDrops: 40,
+    waterHistoryByDate: { [previous]: { ppa: 20, tbv: 20 }, [day]: { ppa: 10, tbv: 0 } },
+    historyStatusByDate: { [previous]: 'success' },
+  };
+  room.users.ppa = {
+    currentActivity: 'home_eating', startTime: noon - 20 * MINUTE, explicitSession: true,
+    waterDate: day, waterDropsToday: 10,
+  };
+  await FocusState.open(noon);
+  assert.equal(room.plant.wateringVersion, 1);
+  assert.equal(FocusState.data.users.ppa.waterDropsToday, 14);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 0);
+  assert.equal(FocusState.data.users.ppa.lastWateredDate, null);
+  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[previous], { ppa: 20, tbv: 20 });
+  assert.equal(FocusState.data.plant.historyStatusByDate[previous], 'success');
+  assert.equal(await FocusState.completeQuest('ppa', 'eat_veggies', noon), true);
+  assert.equal(FocusState.data.plant.dropsToday, 14);
+  assert.equal(await FocusState.waterPlant('ppa', noon), 1);
+  assert.equal(FocusState.data.plant.dropsToday, 15);
+  assert.equal(FocusState.data.users.ppa.lastWateredDate, day);
 });
 
 test('stale revisions and timestamps cannot overwrite a newer activity or a closed day', async () => {
@@ -116,13 +206,14 @@ test('work overlap at 80 percent earns the rounded +20 percent once per block', 
   assert.equal(await FocusState.changeActivity('ppa', 'work_locked_in', noon + 2 * MINUTE), false);
   await FocusState.changeActivity('tbv', 'home_desk_work', noon + 5 * MINUTE);
   await FocusState.refresh(noon + 30 * MINUTE);
-  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 8, tbv: 8 });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 8);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 8);
   assert.equal(logs.filter(entry => entry.pairedBonus).length, 2);
   await FocusState.refresh(noon + 70 * MINUTE);
-  assert.equal(FocusState.data.plant.dropsToday, 16);
+  assert.equal(FocusState.data.plant.dropsToday, 0);
   await FocusState.changeActivity('ppa', 'work_locked_in', noon + 70 * MINUTE);
   await FocusState.refresh(noon + 95 * MINUTE);
-  assert.equal(FocusState.data.plant.waterHistoryByDate[day].ppa, 14);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 14);
 });
 
 test('less than 80 percent or different groups receive only the base reward', async () => {
@@ -130,11 +221,13 @@ test('less than 80 percent or different groups receive only the base reward', as
   await FocusState.changeActivity('ppa', 'work_locked_in', noon);
   await FocusState.changeActivity('tbv', 'home_desk_work', noon + 5 * MINUTE + 1);
   await FocusState.refresh(noon + 30 * MINUTE + 1);
-  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 6, tbv: 6 });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 6);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 6);
   await FocusState.changeActivity('ppa', 'home_desk_work', noon + 31 * MINUTE);
   await FocusState.changeActivity('tbv', 'home_studying', noon + 31 * MINUTE);
   await FocusState.refresh(noon + 61 * MINUTE);
-  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 12, tbv: 14 });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 12);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 14);
   assert.equal(logs.some(entry => entry.pairedBonus), false);
 });
 
@@ -145,7 +238,8 @@ test('paired overlap accumulates across matching portions separated by a break',
   await FocusState.changeActivity('tbv', 'home_gaming', noon + 10 * MINUTE);
   await FocusState.changeActivity('tbv', 'work_locked_in', noon + 13 * MINUTE);
   await FocusState.refresh(noon + 38 * MINUTE);
-  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 8, tbv: 6 });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 8);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 6);
 });
 
 test('sleep is wake-only and long sessions cannot create a history span above 24 hours', async () => {
@@ -155,7 +249,8 @@ test('sleep is wake-only and long sessions cannot create a history span above 24
   assert.equal(FocusState.data.plant.dropsToday, 0);
   assert.equal(FocusState.elapsedMs('ppa', noon + DAY_MS + MINUTE), DAY_MS);
   await FocusState.changeActivity('ppa', 'home_idle', noon + DAY_MS + MINUTE);
-  assert.equal(FocusState.data.plant.dropsToday, 10);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 10);
+  assert.equal(FocusState.data.plant.dropsToday, 0);
   assert.equal(logs.filter(entry => entry.kind === 'activity')
     .reduce((sum, entry) => sum + entry.durationMinutes, 0), 24 * 60);
 });
@@ -226,7 +321,9 @@ test('couple quests credit neither until the recipient confirms and then give +2
   ]);
   assert.deepEqual(results, [true, false]);
   assert.equal(FocusState.data.messages[0].questStatus, 'confirmed');
-  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 2, tbv: 2 });
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 2);
+  assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 2);
+  assert.deepEqual(FocusState.data.plant.waterHistoryByDate[day], { ppa: 0, tbv: 0 });
   assert.equal(FocusState.data.plant.dailyQuests[day].hug_5s_pair, true);
 });
 

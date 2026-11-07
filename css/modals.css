@@ -88,7 +88,7 @@ dialog[open] { animation: arrive 170ms ease-out both; }
 .water-history li { padding: 6px 8px; color: var(--moss); font-size: 12px; overflow-wrap: anywhere; }
 .water-history li + li { border-top: 1px solid var(--edge); }
 .streak-guide { margin-top: 7px; color: var(--moss); font-size: 12px; }
-.gallery-legend { margin-top: 4px; }
+.plant-water-confirm { width: 100%; margin-top: 10px; }
 .streak-progress {
   width: fit-content;
   max-width: 100%;
@@ -104,27 +104,27 @@ dialog[open] { animation: arrive 170ms ease-out both; }
 }
 .plant-gallery-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
   margin-top: 8px;
 }
 .plant-gallery-grid > * {
   display: grid;
   align-content: start;
   min-width: 0;
-  gap: 3px;
-  padding: 3px;
+  gap: 4px;
+  padding: 5px;
   border: 1px solid var(--edge);
   border-radius: 6px;
   background: #EBF5E8;
   color: var(--moss);
   text-align: center;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 720;
   overflow-wrap: anywhere;
 }
-.plant-gallery-grid > :nth-child(n + 6) { background: #F2EFDF; border-color: #D9CFB3; }
-.plant-gallery-grid canvas { width: 100%; height: auto; aspect-ratio: 1; background: var(--cream); }
+.plant-gallery-grid > [data-state="dry"] { background: #F2EFDF; border-color: #D9CFB3; }
+.plant-gallery-grid canvas { width: min(100%, 160px); height: auto; aspect-ratio: 1; margin-inline: auto; background: var(--cream); }
 .plant-gallery-grid figcaption { line-height: 1.18; }
 .plant-gallery-grid figcaption strong, .plant-gallery-grid figcaption small { display: block; }
 .plant-gallery-tile.is-current { border-color: #73976C; box-shadow: inset 0 0 0 1px #73976C; }

@@ -1,9 +1,9 @@
 import { ACTIVITY_GROUPS, ACTIVITY_TITLES, DAILY_QUESTS } from "./catalog.js";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js";
-import { FocusState } from "./state.js";
-import { Timeline } from "./timeline.js";
-import { createQuestDrawer } from "./quests.js";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=watering";
+import { FocusState } from "./state.js?v=watering";
+import { Timeline } from "./timeline.js?v=watering";
+import { createQuestDrawer } from "./quests.js?v=watering";
 import { PocketDB } from "./db.js";
 import { offsetDay } from "./gameTime.js";
 
@@ -13,7 +13,9 @@ const FocusUI = (() => {
     "appDate", "activeProfileName", "profileButton", "profileDialog", "profileClose", "choosePPA",
     "chooseTBV", "plantCanvas", "plantPoke", "plantStage", "plantStatus", "partnerWater",
     "ownWater", "waterTotal", "waterTarget", "waterPartnerBar", "waterOwnBar", "rulesDialog", "rulesClose",
-    "plantHelp", "plantGallery", "plantGalleryClose", "plantGalleryGrid", "rulesStreak", "galleryStreak",
+    "plantHelp", "plantGalleryOpen", "plantGallery", "plantGalleryClose", "plantGalleryGrid", "rulesStreak", "galleryStreak",
+    "plantAvailable", "plantWaterDialog", "plantWaterClose", "plantWaterDescription", "plantWaterConfirm",
+    "plantPPACanvas", "plantTBVCanvas", "plantWaterHeart",
     "streakText", "streakDots", "streakHint", "streakBadge", "streakBadgeText",
     "wiltToast", "wiltToastText", "wiltToastClose",
     "waterHistory", "partnerCanvas", "partnerPoke", "partnerName", "partnerActivity", "partnerElapsed", "speechBubble", "partnerEffects",
@@ -49,7 +51,9 @@ const FocusUI = (() => {
   const canAct = () => connectionStatus === "online";
   const quests = createQuestDrawer(() => profile, commit, canAct, showCoupleQuest);
   let syncing = false;
+  let pouring = false;
   let lastDay = "";
+  let plantRenderDay = "";
   let together = null;
   let togetherWindow = null;
   let wiltToastDay = "";
@@ -81,7 +85,7 @@ const FocusUI = (() => {
     return Math.floor(minutes / 60) + " giờ " + minutes % 60 + " phút";
   }
 
-  function displayArt(slot, user, key, columns, rows) {
+  function displayArt(slot, user, key, columns, rows, { transparent = false, url } = {}) {
     if (renderUser[slot] !== user) {
       let canvas = ui[slot + "Canvas"];
       if (renderUser[slot]) {
@@ -91,7 +95,7 @@ const FocusUI = (() => {
         ui[slot + "Canvas"] = replacement;
         canvas = replacement;
       }
-      renderers[slot] = CanvasRenderer.create(canvas, user);
+      renderers[slot] = CanvasRenderer.create(canvas, user, { transparent });
       renderUser[slot] = user;
       visibleKeys[slot] = null;
     }
@@ -100,7 +104,7 @@ const FocusUI = (() => {
       clearTimeout(artRetries.get(slot));
       const renderer = renderers[slot];
       function load(retry) {
-        void renderer.load(key, columns, rows).then(loaded => {
+        void renderer.load(key, columns, rows, url).then(loaded => {
           if (visibleKeys[slot] !== key || renderers[slot] !== renderer) return;
           syncRenderScope();
           if (!loaded && retry) artRetries.set(slot, setTimeout(() => load(false), 5000));
@@ -127,11 +131,13 @@ const FocusUI = (() => {
     }
   }
 
-  function renderPlant() {
+  function renderPlant(now = Date.now()) {
     const { plant, users } = FocusState.data;
+    plantRenderDay = FocusState.today(now);
+    const currentDay = plant.date === plantRenderDay;
     const target = plant.targetDrops;
-    const own = users[profile].waterDropsToday;
-    const other = users[partner()].waterDropsToday;
+    const own = currentDay ? users[profile].waterDropsToday : 0;
+    const other = currentDay ? users[partner()].waterDropsToday : 0;
     const total = own + other;
     const stage = plant.currentStage;
     const dry = plant.wilted;
@@ -147,14 +153,72 @@ const FocusUI = (() => {
     const shown = Math.max(target, total);
     ui.waterPartnerBar.style.width = other / shown * 100 + "%";
     ui.waterOwnBar.style.width = own / shown * 100 + "%";
-    ui.plantStatus.textContent = dry
-      ? "Cây đang héo · đủ " + target + " giọt hôm nay để hồi phục."
-      : total > target ? "Đã vượt mục tiêu " + (total - target) + " giọt."
-      : total === target ? "Đã đủ nước hôm nay." : "Còn " + (target - total) + " giọt để đủ nước hôm nay.";
+    ui.plantStatus.textContent = !currentDay ? "Đang chờ đồng bộ số nước của ngày mới."
+      : dry
+      ? "Cây đang héo · cần tưới thêm " + (target - total) + " giọt để hồi phục."
+      : total > target ? "Đã tưới vượt mục tiêu " + (total - target) + " giọt."
+      : total === target ? "Đã tưới đủ nước hôm nay." : "Cần tưới thêm " + (target - total) + " giọt hôm nay.";
     const key = "bonsai_" + String(stage).padStart(2, "0") + (dry ? "_dry" : "_healthy");
     displayArt("plant", "plant", key, dry ? 1 : 5, 1);
+    renderPlantWaterers(currentDay ? plant.date : null, users);
+    renderWaterControls(currentDay ? users[profile].waterDropsAvailable ?? 0 : 0, currentDay);
     renderStreak(plant, total);
-    showWiltToastIfNeeded(plant);
+    if (currentDay) showWiltToastIfNeeded(plant);
+  }
+
+  function renderPlantWaterers(date, users) {
+    for (const [user, slot] of [["ppa", "plantPPA"], ["tbv", "plantTBV"]]) {
+      const active = date !== null && users[user].lastWateredDate === date;
+      ui[slot + "Canvas"].hidden = !active;
+      if (active && !renderers[slot]) {
+        const key = user + "_plant_watering";
+        const url = new URL("../assets/sprites/" + user + "/" + key + "_sheet.png", import.meta.url).href;
+        displayArt(slot, user, key, 3, 2, { transparent: true, url });
+      } else if (!active && renderers[slot]) {
+        clearTimeout(artRetries.get(slot));
+        artRetries.delete(slot);
+        renderers[slot].dispose();
+        delete renderers[slot];
+        delete renderUser[slot];
+        delete visibleKeys[slot];
+      }
+    }
+    ui.plantWaterHeart.hidden = ui.plantPPACanvas.hidden || ui.plantTBVCanvas.hidden;
+  }
+
+  function renderWaterControls(available, currentDay) {
+    ui.plantAvailable.textContent = available + " 💧";
+    const description = !currentDay ? "Đang chờ đồng bộ số nước của ngày mới."
+      : available > 0
+      ? names[profile] + " có " + available + " giọt nước. Tưới hết số giọt này cho bonsai nhé?"
+      : names[profile] + " chưa có nước để tưới. Hoàn thành hoạt động hoặc nhiệm vụ để nhận giọt nước.";
+    const message = canAct() ? description : description + " Cần có kết nối để tưới.";
+    if (ui.plantWaterDescription.textContent !== message) ui.plantWaterDescription.textContent = message;
+    ui.plantWaterConfirm.textContent = available > 0 ? "Tưới hết " + available + " giọt" : "Tưới hết nước có sẵn";
+    ui.plantWaterConfirm.disabled = pouring || !canAct() || !currentDay || available === 0;
+  }
+
+  async function waterPlant() {
+    if (ui.plantWaterConfirm.disabled) return;
+    const user = profile;
+    pouring = true;
+    ui.plantWaterConfirm.disabled = true;
+    void AudioEngine.prepare();
+    try {
+      const amount = await commit(() => FocusState.waterPlant(user));
+      if (amount > 0) {
+        if (ui.plantWaterDialog.open && profile === user) ui.plantWaterDialog.close();
+        const slot = user === "ppa" ? "plantPPA" : "plantTBV";
+        if (!ui[slot + "Canvas"].hidden) {
+          renderers[slot]?.restart(AnimationManager.tick);
+          feedback(ui.plantPoke, AudioEngine.waterDrop);
+        }
+        showActionStatus(names[user] + " đã tưới " + amount + " giọt.", null);
+      }
+    } finally {
+      pouring = false;
+      renderPlant();
+    }
   }
 
   function renderStreak(plant, total) {
@@ -212,9 +276,9 @@ const FocusUI = (() => {
 
   function openPlantGallery() {
     if (!galleryTiles.length) {
-      for (const variant of ["healthy", "dry"]) {
-        const dry = variant === "dry";
-        for (let index = 0; index < 5; index++) {
+      for (let index = 0; index < plantNames.length; index++) {
+        for (const variant of ["healthy", "dry"]) {
+          const dry = variant === "dry";
           const tile = document.createElement("figure");
           tile.className = "plant-gallery-tile";
           tile.dataset.state = variant;
@@ -241,6 +305,7 @@ const FocusUI = (() => {
     const { plant } = FocusState.data;
     renderStreak(plant, plant.dropsToday);
     openDialog(ui.plantGallery);
+    ui.plantGallery.scrollTop = 0;
     syncGallery();
   }
 
@@ -303,6 +368,7 @@ const FocusUI = (() => {
 
   function renderWaterHistory() {
     const { plant, users } = FocusState.data;
+    const today = FocusState.today();
     const records = {
       ...plant.waterHistoryByDate,
       [plant.date]: { ppa: users.ppa.waterDropsToday, tbv: users.tbv.waterDropsToday },
@@ -311,7 +377,7 @@ const FocusUI = (() => {
     for (const [day, amounts] of Object.entries(records).sort(([a], [b]) => b.localeCompare(a))) {
       const entry = document.createElement("li");
       const [year, month, date] = day.split("-").map(Number);
-      const label = day === plant.date ? "Hôm nay" : new Intl.DateTimeFormat("vi-VN").format(new Date(year, month - 1, date));
+      const label = day === today ? "Hôm nay" : new Intl.DateTimeFormat("vi-VN").format(new Date(year, month - 1, date));
       entry.textContent = label + " · PPA " + amounts.ppa + " · TBV " + amounts.tbv
         + " · " + (amounts.ppa + amounts.tbv) + " giọt";
       ui.waterHistory.append(entry);
@@ -371,13 +437,13 @@ const FocusUI = (() => {
     if (ownStartTime == null) {
       ui.timerStatus.textContent = "Chọn một hoạt động để bắt đầu phiên.";
     } else if (!info.category) {
-      ui.timerStatus.textContent = "Hoạt động này không góp nước.";
+      ui.timerStatus.textContent = "Hoạt động này không nhận nước tưới.";
     } else if (info.wakeOnly) {
       ui.timerStatus.textContent = "Khi thức dậy · đủ 7 giờ +5 giọt · đủ 8 giờ +10 giọt.";
     } else if (info.cap != null && info.creditedToday >= info.cap) {
-      ui.timerStatus.textContent = "Đã góp đủ " + info.cap + " giọt cho nhóm này hôm nay.";
+      ui.timerStatus.textContent = "Đã nhận đủ " + info.cap + " giọt cho nhóm này hôm nay.";
     } else {
-      ui.timerStatus.textContent = "Đủ " + info.minutes + " phút sẽ góp " + info.reward + " giọt cho cây.";
+      ui.timerStatus.textContent = "Đủ " + info.minutes + " phút sẽ nhận " + info.reward + " giọt để tưới cây.";
     }
   }
 
@@ -616,6 +682,11 @@ const FocusUI = (() => {
     if (document.hidden) return;
     labelDate(now);
     renderClocks(now);
+    if (FocusState.today(now) !== plantRenderDay) {
+      renderPlant(now);
+      if (ui.rulesDialog.open) renderWaterHistory();
+      syncRenderScope();
+    }
     const due = FocusState.nextRefreshAt(now) <= now;
     if (force || due || FocusState.today(now) !== lastDay) void refresh();
     clockTimer = setTimeout(watchClock, 1000 - now % 1000);
@@ -699,9 +770,11 @@ const FocusUI = (() => {
     ui.choosePPA.addEventListener("click", () => switchProfile("ppa"));
     ui.chooseTBV.addEventListener("click", () => switchProfile("tbv"));
     ui.plantPoke.addEventListener("click", () => {
-      feedback(ui.plantPoke, AudioEngine.waterDrop);
-      openPlantGallery();
+      renderPlant();
+      openDialog(ui.plantWaterDialog);
     });
+    ui.plantWaterConfirm.addEventListener("click", () => void waterPlant());
+    ui.plantGalleryOpen.addEventListener("click", openPlantGallery);
     ui.plantHelp.addEventListener("click", openPlantRules);
     ui.streakBadge.addEventListener("click", () => {
       ui.plant.focus({ preventScroll: true });
@@ -732,7 +805,7 @@ const FocusUI = (() => {
     ui.partnerPoke.addEventListener("click", () => { feedback(ui.partnerPoke); openDialog(ui.partnerDialog); });
     ui.ownPoke.addEventListener("click", () => { feedback(ui.ownPoke); openDialog(ui.activityDialog); });
     for (const [button, dialog] of [[ui.profileClose, ui.profileDialog], [ui.rulesClose, ui.rulesDialog],
-      [ui.plantGalleryClose, ui.plantGallery],
+      [ui.plantGalleryClose, ui.plantGallery], [ui.plantWaterClose, ui.plantWaterDialog],
       [ui.partnerClose, ui.partnerDialog], [ui.activityClose, ui.activityDialog]]) {
       button.addEventListener("click", () => dialog.close());
     }

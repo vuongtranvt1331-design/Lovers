@@ -7,8 +7,8 @@
 <meta name="theme-color" content="#F4F8F3">
 <title>Pocket Space: Focus &amp; Together</title>
 <link rel="stylesheet" href="./css/style.css">
-<link rel="stylesheet" href="./css/components.css">
-<link rel="stylesheet" href="./css/modals.css">
+<link rel="stylesheet" href="./css/components.css?v=watering">
+<link rel="stylesheet" href="./css/modals.css?v=watering">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -68,7 +68,7 @@
           <p id="ownElapsed" class="actor-elapsed mono">—</p>
         </div>
       </div>
-      <p id="timerStatus" class="small muted">Duy trì hoạt động để tự động góp nước.</p>
+      <p id="timerStatus" class="small muted">Hoàn thành hoạt động để nhận nước tưới.</p>
       <div class="actor-scene">
         <button class="actor-poke" id="ownPoke" type="button" aria-haspopup="dialog" aria-label="Đổi hoạt động của bạn">
           <canvas id="ownCanvas" width="160" height="160" aria-hidden="true"></canvas>
@@ -97,7 +97,7 @@
         <span class="plant-stage" id="plantStage">Mầm non</span>
       </div>
       <div class="plant-scene">
-        <button class="plant-poke" id="plantPoke" type="button" aria-haspopup="dialog" aria-label="Mở bộ sưu tập bonsai">
+        <button class="plant-poke" id="plantPoke" type="button" aria-haspopup="dialog" aria-label="Tưới bonsai" aria-controls="plantWaterDialog">
           <canvas id="plantCanvas" width="160" height="160" aria-hidden="true"></canvas>
           <svg class="plant-growth" viewBox="0 0 160 160" shape-rendering="crispEdges" aria-hidden="true">
             <g class="plant-growth-position">
@@ -111,6 +111,9 @@
             </g>
           </svg>
         </button>
+        <canvas class="plant-waterer plant-waterer-ppa" id="plantPPACanvas" width="128" height="128" aria-hidden="true" hidden></canvas>
+        <canvas class="plant-waterer plant-waterer-tbv" id="plantTBVCanvas" width="128" height="128" aria-hidden="true" hidden></canvas>
+        <span class="plant-water-heart pixel-heart" id="plantWaterHeart" aria-hidden="true" hidden></span>
         <div class="plant-milestones" aria-hidden="true">
           <span class="plant-milestone" data-day="7">
             <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges"><path d="M5 5h2v8H5zM0 2h4v2h1v3H2V5H0zm8 0h1V0h3v3h-1v2H9v2H7V4h1z"></path></svg>
@@ -121,14 +124,19 @@
             14 ngày
           </span>
         </div>
-        <button class="plant-help" id="plantHelp" type="button" aria-haspopup="dialog" aria-label="Xem cách chăm bonsai và lịch sử góp nước">?</button>
+      </div>
+      <div class="plant-tools line between">
+        <button class="plant-tool" id="plantGalleryOpen" type="button" aria-haspopup="dialog" aria-controls="plantGallery" aria-label="Xem các giai đoạn bonsai">Giai đoạn</button>
+        <p class="plant-water-balance">Bạn có sẵn <strong id="plantAvailable" class="mono">0 💧</strong></p>
+        <button class="plant-tool" id="plantHelp" type="button" aria-haspopup="dialog" aria-controls="rulesDialog" aria-label="Xem cách chăm bonsai và lịch sử tưới nước">?</button>
       </div>
       <p id="plantStatus" class="muted small" aria-live="polite">Hai bạn cùng chăm cây mỗi ngày.</p>
-      <div class="water-panel" role="group" aria-label="Giọt nước hôm nay">
+      <div class="water-panel" role="group" aria-labelledby="plantPouredLabel">
+        <p class="plant-poured-label" id="plantPouredLabel">Đã tưới hôm nay</p>
         <div class="water-values">
-          <span class="water-side"><span class="water-key" aria-hidden="true"></span>Người kia <strong id="partnerWater" class="mono">0</strong></span>
+          <span class="water-side"><span class="water-key" aria-hidden="true"></span><strong id="partnerWater" class="mono">TBV · 0 💧</strong></span>
           <span class="water-total mono"><span class="drop" aria-hidden="true"></span> <strong id="waterTotal">0</strong>/<span id="waterTarget">40</span></span>
-          <span class="water-side own"><strong id="ownWater" class="mono">0</strong> Bạn <span class="water-key" aria-hidden="true"></span></span>
+          <span class="water-side own"><strong id="ownWater" class="mono">PPA · 0 💧</strong><span class="water-key" aria-hidden="true"></span></span>
         </div>
         <div class="water-meter" aria-hidden="true">
           <span class="water-segment partner" id="waterPartnerBar"></span>
@@ -218,13 +226,21 @@
   <button class="button profile-reconnect" id="syncButton" type="button" hidden>Kiểm tra lại kết nối</button>
 </dialog>
 
+<dialog id="plantWaterDialog" aria-labelledby="plantWaterHeading" aria-describedby="plantWaterDescription">
+  <header class="dialog-title line between">
+    <div><p class="kicker">Khu vườn chung</p><h2 id="plantWaterHeading">Tưới bonsai</h2></div>
+    <button class="icon-button" type="button" id="plantWaterClose" aria-label="Đóng hộp tưới nước">×</button>
+  </header>
+  <p id="plantWaterDescription" class="small" role="status">Bạn chưa có nước để tưới.</p>
+  <button class="button primary plant-water-confirm" id="plantWaterConfirm" type="button" disabled>Tưới hết nước có sẵn</button>
+</dialog>
+
 <dialog id="plantGallery" aria-labelledby="plantGalleryHeading">
   <header class="dialog-title line between">
     <div><p class="kicker">Khu vườn chung</p><h2 id="plantGalleryHeading">Bộ sưu tập bonsai</h2></div>
     <button class="icon-button" type="button" id="plantGalleryClose" aria-label="Đóng bộ sưu tập">×</button>
   </header>
-  <p class="muted small">Hàng trên là cây tươi tốt. Hàng dưới là cây héo.</p>
-  <p class="gallery-legend small muted">1 Mầm hạt · 2 Chồi non · 3 Bonsai mini · 4 Đơm hoa · 5 Cổ thụ</p>
+  <p class="muted small">Mỗi hàng là một giai đoạn. Cây xanh tốt ở bên trái, cây héo ở bên phải.</p>
   <p class="streak-guide">Hai bạn cần tích lũy 21 ngày đủ nước để cây bước sang giai đoạn phát triển tiếp theo.</p>
   <p id="galleryStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/21 ngày đủ nước</p>
   <div class="plant-gallery-grid" id="plantGalleryGrid"></div>
@@ -238,19 +254,20 @@
   <p class="streak-guide">Hai bạn cần tích lũy 21 ngày đủ nước để cây bước sang giai đoạn phát triển tiếp theo.</p>
   <p id="rulesStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/21 ngày đủ nước</p>
   <ul class="rule-list" id="plantRules">
-    <li><strong>Ngủ.</strong> Khi kết thúc giấc ngủ, nhận 10 giọt nếu ngủ từ 8 giờ, 5 giọt nếu ngủ từ 7 đến dưới 8 giờ. Dưới 7 giờ không góp nước.</li>
+    <li><strong>Tưới bonsai.</strong> Hoàn thành hoạt động hoặc nhiệm vụ để nhận giọt nước. Chạm vào cây để tưới toàn bộ số giọt bạn đang có. Chỉ nước đã tưới mới tính vào mục tiêu ngày.</li>
+    <li><strong>Ngủ.</strong> Khi kết thúc giấc ngủ, nhận 10 giọt nếu ngủ từ 8 giờ, 5 giọt nếu ngủ từ 7 đến dưới 8 giờ. Dưới 7 giờ không nhận giọt nào.</li>
     <li><strong>Học hoặc đọc.</strong> 8 giọt mỗi 30 phút, tối đa 16 giọt mỗi ngày.</li>
     <li><strong>Tập trung làm việc.</strong> 6 giọt mỗi 25 phút, tối đa 24 giọt mỗi ngày.</li>
-    <li><strong>Chạy bộ hoặc tập gym.</strong> Đủ 30 phút góp 10 giọt. Hai hoạt động dùng chung một lượt mỗi ngày.</li>
-    <li><strong>Nấu ăn hoặc dọn dẹp.</strong> Đủ 20 phút góp 4 giọt. Hai hoạt động dùng chung một lượt mỗi ngày.</li>
-    <li><strong>Dùng bữa.</strong> Đủ 20 phút góp 4 giọt, mỗi lượt dùng bữa nhận thưởng một lần.</li>
-    <li><strong>Thư giãn hoặc dùng điện thoại.</strong> Không góp nước.</li>
+    <li><strong>Chạy bộ hoặc tập gym.</strong> Đủ 30 phút nhận 10 giọt. Hai hoạt động dùng chung một lượt mỗi ngày.</li>
+    <li><strong>Nấu ăn hoặc dọn dẹp.</strong> Đủ 20 phút nhận 4 giọt. Hai hoạt động dùng chung một lượt mỗi ngày.</li>
+    <li><strong>Dùng bữa.</strong> Đủ 20 phút nhận 4 giọt, mỗi lượt dùng bữa nhận thưởng một lần.</li>
+    <li><strong>Thư giãn hoặc dùng điện thoại.</strong> Không nhận nước tưới.</li>
     <li><strong>Focus Cùng Nhau.</strong> Khi hai phiên làm việc hoặc hai phiên học trùng ít nhất 80% thời lượng của phiên, thưởng tăng 20%, làm tròn lên và tính trong giới hạn ngày.</li>
-    <li>Mục tiêu ở năm giai đoạn lần lượt là 40, 55, 70, 85 và 100 giọt. Ngày chốt lúc 00:00 giờ Việt Nam. Đủ 21 ngày tích lũy, cây lớn thêm một giai đoạn. Nước đặt lại về 0 sau khi chốt.</li>
+    <li>Mục tiêu ở năm giai đoạn lần lượt là 40, 55, 70, 85 và 100 giọt. Ngày chốt lúc 00:00 giờ Việt Nam. Đủ 21 ngày tích lũy, cây lớn thêm một giai đoạn. Sang ngày mới, cả nước chưa tưới và bộ đếm đã tưới về 0.</li>
     <li>Mốc 7 và 14 ngày mở chồi mới và một khiên. Có thể giữ một khiên. Khi thiếu nước, khiên tự dùng để giữ tiến độ. Cây vẫn héo.</li>
     <li>Mỗi ngày thiếu nước khi hết khiên trừ 5 ngày tích lũy. Sau mỗi ba ngày thiếu nước liên tiếp, cây lùi một giai đoạn và tiến độ trở về 0. Giai đoạn thấp nhất là mầm hạt.</li>
   </ul>
-  <h3 class="water-history-heading" id="waterHistoryHeading">Lịch sử góp nước</h3>
+  <h3 class="water-history-heading" id="waterHistoryHeading">Lịch sử tưới nước</h3>
   <ul class="water-history" id="waterHistory" aria-labelledby="waterHistoryHeading"></ul>
 </dialog>
 
@@ -300,6 +317,6 @@
   </div>
   <p id="historyDetail" class="small muted" role="status"></p>
 </dialog>
-<script type="module" src="./js/app.js"></script>
+<script type="module" src="./js/app.js?v=watering"></script>
 </body>
 </html>

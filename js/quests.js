@@ -1,5 +1,5 @@
 import { DAILY_QUESTS } from "./catalog.js";
-import { FocusState } from "./state.js";
+import { FocusState } from "./state.js?v=watering";
 import { AudioEngine } from "./audio.js";
 
 const questRoot = new URL("../assets/quests/", import.meta.url);
