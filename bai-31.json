@@ -1,0 +1,224 @@
+{
+  "id": "37",
+  "title": "37. Liên từ nối câu",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "pageTitle": "Liên từ đẳng lập và quan hệ ý nghĩa",
+      "contentHTML": "<p>Liên từ đẳng lập như and, but, or, so nối các thành phần hoặc mệnh đề cùng cấp. Chọn liên từ theo quan hệ bổ sung, tương phản, lựa chọn hoặc kết quả; ví dụ: The evidence is limited, but the hypothesis remains plausible.</p>"
+    },
+    {
+      "pageNumber": 2,
+      "pageTitle": "Liên từ phụ thuộc và trạng từ liên kết",
+      "contentHTML": "<p>Because và although mở đầu mệnh đề phụ thuộc. However, therefore và nevertheless là trạng từ liên kết, không tự nối hai mệnh đề độc lập chỉ bằng một dấu phẩy: The sample was small; nevertheless, the pattern was consistent.</p>"
+    },
+    {
+      "pageNumber": 3,
+      "pageTitle": "Dấu câu và lựa chọn theo ngữ cảnh",
+      "contentHTML": "<p>Because of và despite thường theo sau bởi cụm danh từ hoặc V-ing, còn because và although theo sau bởi mệnh đề. Các từ liên kết gần nghĩa không phải lúc nào cũng hoán đổi được: kiểm tra dấu câu, cấu trúc và ý định của người viết.</p>"
+    }
+  ],
+  "exercises": [
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The evidence was incomplete, {{but | yet::But và yet đều có thể nối hai mệnh đề đẳng lập với quan hệ tương phản.}} [nhưng] the panel considered the allegation credible."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The review was delayed {{because | since | as::Các liên từ này có thể mở đầu mệnh đề nêu nguyên nhân trong ngữ cảnh này.}} [bởi vì] several witnesses were unavailable."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "{{Although | Though | While::Các liên từ này có thể mở đầu mệnh đề nhượng bộ, dù sắc thái có thể khác nhau.}} [mặc dù] the sample was small, the pattern was consistent."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The budget was reduced; {{therefore | consequently | hence::Các trạng từ liên kết này có thể chỉ kết quả; dấu chấm phẩy ngăn hai mệnh đề độc lập.}} [do đó], the project was scaled back."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "{{Despite | Notwithstanding::Despite và notwithstanding có thể đứng trước cụm danh từ để diễn đạt nhượng bộ.}} [mặc dù] the initial opposition, the proposal was approved."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The committee could postpone the vote, {{or::Or nối hai phương án lựa chọn.}} [hoặc] it could seek additional evidence."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The team verified the figures {{and::And nối hai hành động cùng chủ ngữ.}} [và] documented the assumptions behind them."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The supplier failed to meet the deadline, {{so::So nối mệnh đề chỉ nguyên nhân với mệnh đề kết quả.}} [vì vậy] the client terminated the agreement."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The risks were substantial; {{however | nevertheless | nonetheless::Các trạng từ này có thể chỉ sự tương phản với mệnh đề trước.}} [tuy nhiên], the board proceeded."
+    },
+    {
+      "tier": "practice",
+      "type": "mcq",
+      "questionHTML": "The evidence is limited, ___ the conclusion remains tentative. (( **so** | although of | despite that :: So có thể nối nguyên nhân với kết quả. ))"
+    },
+    {
+      "tier": "practice",
+      "type": "mcq",
+      "questionHTML": "___ the substantial cost, the board approved the initiative. (( **Despite** | Because the | Although of :: Despite đứng trước cụm danh từ để chỉ nhượng bộ. ))"
+    },
+    {
+      "tier": "practice",
+      "type": "mcq",
+      "questionHTML": "The sample was small; ___, the results were consistent. (( **nevertheless** | although of | despite the :: Nevertheless là trạng từ liên kết có thể diễn đạt tương phản sau dấu chấm phẩy. ))"
+    },
+    {
+      "tier": "practice",
+      "type": "mcq",
+      "questionHTML": "The meeting was cancelled ___ the chair was unavailable. (( **because** | despite of | because of the :: Because mở đầu mệnh đề có chủ ngữ và động từ. ))"
+    },
+    {
+      "tier": "practice",
+      "type": "mcq",
+      "questionHTML": "The report identifies risks ___ proposes practical safeguards. (( **and** | whereas of | because of the :: And nối hai động từ cùng chủ ngữ. ))"
+    },
+    {
+      "tier": "practice",
+      "type": "unscramble",
+      "questionHTML": "~~ The | evidence | was | incomplete, | but | the | panel | considered | it | credible. ~~"
+    },
+    {
+      "tier": "practice",
+      "type": "unscramble",
+      "questionHTML": "~~ Although | the | sample | was | small, | the | pattern | was | consistent. ~~"
+    },
+    {
+      "tier": "practice",
+      "type": "unscramble",
+      "questionHTML": "~~ The | budget | was | reduced; | therefore, | the | project | was | scaled | back. ~~"
+    },
+    {
+      "tier": "practice",
+      "type": "unscramble",
+      "questionHTML": "~~ Despite | the | initial | opposition, | the | proposal | was | approved. ~~"
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "The committee requested more time, {{so::So nối nguyên nhân với kết quả.}} [vì vậy] the vote was postponed."
+    },
+    {
+      "tier": "practice",
+      "type": "gap-fill",
+      "questionHTML": "{{Despite | Notwithstanding::Despite và notwithstanding có thể đứng trước cụm danh từ.}} [mặc dù] the delay, the team met its revised deadline."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The application was rejected {{because of | owing to | due to::Các cụm này có thể đứng trước cụm danh từ để chỉ nguyên nhân.}} [bởi vì] incomplete documentation."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "{{Although | Though | While::Các liên từ này có thể dẫn mệnh đề nhượng bộ trong ngữ cảnh.}} [mặc dù] the revised estimate was lower, it remained above budget."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The survey was anonymous; {{therefore | consequently | hence::Các trạng từ này có thể nêu kết quả từ mệnh đề trước.}} [do đó], respondents were more willing to participate."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The analysts found no error, {{but | yet::But hoặc yet đều có thể nối hai mệnh đề tương phản.}} [nhưng] they recommended further checks."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "{{Despite | Notwithstanding::Despite và notwithstanding đứng trước cụm danh từ để diễn đạt sự nhượng bộ.}} [mặc dù] repeated objections, the committee adopted the policy."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The data were incomplete; {{however | nevertheless | nonetheless::Các trạng từ liên kết này có thể diễn tả tương phản trong ngữ cảnh.}} [tuy nhiên], a provisional assessment was possible."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The report was revised {{because | since | as::Các liên từ này có thể mở đầu mệnh đề nêu nguyên nhân.}} [bởi vì] the original figures contained an error."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The panel may request an extension, {{or::Or nối các lựa chọn.}} [hoặc] it may issue an interim statement."
+    },
+    {
+      "tier": "apply",
+      "type": "gap-fill",
+      "questionHTML": "The conditions were not met, {{so::So nối nguyên nhân với kết quả.}} [vì vậy] the application was withdrawn."
+    },
+    {
+      "tier": "apply",
+      "type": "mcq",
+      "questionHTML": "The deadline was extended ___ several submissions arrived late. (( **because** | despite of | because of the :: Because mở đầu mệnh đề chỉ nguyên nhân. ))"
+    },
+    {
+      "tier": "apply",
+      "type": "mcq",
+      "questionHTML": "___ the objections raised by staff, the policy was implemented. (( **Notwithstanding** | Although of | Because the :: Notwithstanding có thể đi trước cụm danh từ và chỉ nhượng bộ. ))"
+    },
+    {
+      "tier": "apply",
+      "type": "mcq",
+      "questionHTML": "The findings were preliminary; ___, the team withheld its recommendation. (( **therefore** | although of | despite the :: Therefore nêu kết quả sau dấu chấm phẩy. ))"
+    },
+    {
+      "tier": "apply",
+      "type": "mcq",
+      "questionHTML": "The proposal is ambitious, ___ it lacks a clear funding plan. (( **yet** | because of | despite of :: Yet nối hai mệnh đề có quan hệ tương phản. ))"
+    },
+    {
+      "tier": "apply",
+      "type": "mcq",
+      "questionHTML": "The board may approve the plan, ___ it may refer the matter back to the panel. (( **or** | despite | because of :: Or nối các lựa chọn. ))"
+    },
+    {
+      "tier": "apply",
+      "type": "unscramble",
+      "questionHTML": "~~ The | supplier | missed | the | deadline, | so | the | client | terminated | the | agreement. ~~"
+    },
+    {
+      "tier": "apply",
+      "type": "unscramble",
+      "questionHTML": "~~ The | risks | were | substantial; | however, | the | board | proceeded. ~~"
+    },
+    {
+      "tier": "apply",
+      "type": "unscramble",
+      "questionHTML": "~~ The | team | verified | the | figures | and | documented | its | assumptions. ~~"
+    },
+    {
+      "tier": "apply",
+      "type": "unscramble",
+      "questionHTML": "~~ The | panel | may | request | an | extension, | or | it | may | issue | a | statement. ~~"
+    },
+    {
+      "tier": "apply",
+      "type": "paragraph-gap-fill",
+      "questionHTML": "{{Although | Though | While::Các liên từ này có thể mở đầu mệnh đề nhượng bộ.}} [mặc dù] the initial sample was small, the team identified a consistent pattern. The figures required verification; {{therefore | consequently | hence::Các trạng từ này diễn tả kết quả sau dấu chấm phẩy.}} [do đó], an independent review was commissioned. The review took longer than expected, {{but | yet::But hoặc yet nối các mệnh đề tương phản.}} [nhưng] the final report was completed on time."
+    },
+    {
+      "tier": "apply",
+      "type": "paragraph-gap-fill",
+      "questionHTML": "The proposal attracted criticism {{because | since | as::Các liên từ này mở đầu mệnh đề chỉ nguyên nhân.}} [bởi vì] its costs were uncertain. {{Despite | Notwithstanding::Các cụm này đứng trước cụm danh từ để chỉ nhượng bộ.}} [mặc dù] the objections, the chair requested a further assessment. The estimates remained provisional; {{however | nevertheless | nonetheless::Các trạng từ này có thể diễn đạt sự tương phản.}} [tuy nhiên], the board agreed to continue."
+    }
+  ],
+  "lessonNumber": 1
+}
