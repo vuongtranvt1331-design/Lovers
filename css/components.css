@@ -467,15 +467,36 @@ body[data-together="true"] .actor-poke { border-color: #D9C3A0; }
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--tool-edge, var(--edge));
   border-radius: 10px;
   color: var(--ink);
-  background: var(--card);
-  box-shadow: inset 0 -2px 0 #D4E4D1;
+  background: var(--tool-fill, var(--card));
+  box-shadow: inset 0 -2px 0 var(--tool-shadow, #D4E4D1);
   font-weight: 800;
 }
 .quick-tool { min-width: 0; padding: 4px; font-size: 13px; }
-.quick-tool:hover, .streak-badge:hover, .profile-button:hover { background: #EFF7E9; border-color: #91B58D; }
+.quick-tool:hover, .streak-badge:hover, .profile-button:hover {
+  background: var(--tool-hover, #EFF7E9);
+  border-color: var(--tool-edge, #91B58D);
+}
+#historyButton {
+  --tool-fill: #E2EFDA;
+  --tool-edge: #AEC8A4;
+  --tool-shadow: #D2E1C9;
+  --tool-hover: #D8E9CE;
+}
+#questOpen {
+  --tool-fill: #FBEDC5;
+  --tool-edge: #DCC488;
+  --tool-shadow: #EEDCB0;
+  --tool-hover: #F6E5B0;
+}
+#notesOpen {
+  --tool-fill: #F4E1DE;
+  --tool-edge: #D8B5AE;
+  --tool-shadow: #EACFCA;
+  --tool-hover: #EFD5D1;
+}
 .quick-tool svg { flex: 0 0 15px; width: 15px; height: 15px; }
 .quest-body { padding-bottom: 2px; }
 .quest-body > p { margin: 0 0 8px; }
