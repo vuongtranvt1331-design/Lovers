@@ -1,6 +1,6 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=notes-board";
-import { CanvasRenderer } from "./canvasRenderer.js?v=notes-board";
-import { FocusState } from "./state.js?v=notes-board";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=activity-plan-nine";
+import { CanvasRenderer } from "./canvasRenderer.js?v=activity-plan-nine";
+import { FocusState } from "./state.js?v=activity-plan-nine";
 import { DAY_MS, dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
 
 export const Timeline = (() => {
@@ -266,7 +266,8 @@ export const Timeline = (() => {
     for (const user of users) {
       const current = snapshot[user];
       if (current?.startTime != null) {
-        const plannedEnd = current.plannedEndTime ?? current.startTime + DAY_MS;
+        const plannedEnd = Math.min(current.plannedEndTime ?? now,
+          current.activitySchedule?.[0]?.startsAt ?? Infinity);
         add(user, current.currentActivity, current.startTime, plannedEnd, false);
       } else if (current?.idleStartedAt != null) {
         add(user, current.currentActivity, Math.max(current.idleStartedAt, now - DAY_MS), now, false);

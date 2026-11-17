@@ -16,10 +16,51 @@ service cloud.firestore {
           && data.lastActivityTimestamp <= request.time.toMillis() + 120000))
         && data.waterDropsToday is int && data.waterDropsToday >= 0
         && data.waterToday == data.waterDropsToday && data.questsDone is list
-        && data.lastActive == request.time
+        && data.lastActive == request.time && validSchedule(data)
         && ((data.currentActivity == 'home_idle' && data.startTime == null)
           || (data.currentActivity != 'home_idle' && data.startTime is int
             && data.startTime <= request.time.toMillis() + 120000));
+    }
+    function validScheduleSlot(entry, anchor, slot) {
+      return entry is map && entry.keys().hasOnly(['slot', 'activity', 'startsAt'])
+        && entry.slot == slot && entry.activity is string
+        && entry.startsAt is int && entry.startsAt == anchor + slot * 3600000;
+    }
+    function validSchedule(data) {
+      let entries = data.get('activitySchedule', []);
+      let anchor = data.get('scheduleAnchorAt', null);
+      return data.get('scheduleVersion', 0) is int && data.get('scheduleVersion', 0) >= 0
+        && entries is list && entries.size() <= 2
+        && ((entries.size() == 0 && anchor == null) || (entries.size() > 0 && anchor is int
+          && anchor <= request.time.toMillis() + 120000
+          && (validScheduleSlot(entries[0], anchor, 1) || validScheduleSlot(entries[0], anchor, 2))
+          && (entries.size() == 1 || (validScheduleSlot(entries[0], anchor, 1)
+            && validScheduleSlot(entries[1], anchor, 2)))));
+    }
+    function automatedSlot(before, after, entry, count, remaining) {
+      return entry.startsAt <= request.time.toMillis() + 120000
+        && entry.startsAt <= roomAfter().clientEvaluatedAt.toMillis()
+        && after.currentActivity == entry.activity
+        && after.startTime == (entry.activity == 'home_idle' ? null : entry.startsAt)
+        && after.lastActivityTimestamp == entry.startsAt && after.plannedEndTime == null
+        && after.sessionVersion == before.sessionVersion + count
+        && after.scheduleVersion == before.scheduleVersion + count
+        && after.activitySchedule == remaining
+        && after.scheduleAnchorAt == (remaining.size() == 0 ? null : before.scheduleAnchorAt);
+    }
+    function validAutomation(before, after) {
+      let entries = before.get('activitySchedule', []);
+      return entries.size() > 0
+        && (automatedSlot(before, after, entries[0], 1, entries.removeAll([entries[0]]))
+          || (entries.size() == 2 && automatedSlot(before, after, entries[1], 2, [])));
+    }
+    function scheduleMigration(before, after) {
+      return get(roomPath()).data.plant.get('activityScheduleVersion', 0) < 1
+        && roomAfter().plant.get('activityScheduleVersion', 0) >= 1
+        && after.currentActivity == before.currentActivity && after.startTime == before.startTime
+        && after.sessionVersion == before.sessionVersion
+        && after.lastActivityTimestamp == before.lastActivityTimestamp && after.plannedEndTime == null
+        && after.activitySchedule == [] && after.scheduleAnchorAt == null && after.scheduleVersion == 0;
     }
     function mirrored(data, role) {
       let room = roomAfter();
@@ -29,15 +70,13 @@ service cloud.firestore {
     function validSessionChange(before, after, role) {
       let changed = after.diff(before).affectedKeys();
       return after.sessionVersion >= before.sessionVersion
+        && after.get('scheduleVersion', 0) >= before.get('scheduleVersion', 0)
         && (before.lastActivityTimestamp == null || after.lastActivityTimestamp >= before.lastActivityTimestamp)
         && (!changed.hasAny(['currentActivity', 'startTime', 'plannedEndTime',
-                            'explicitSession', 'sessionVersion', 'lastActivityTimestamp', 'sessionId'])
+                            'explicitSession', 'sessionVersion', 'lastActivityTimestamp', 'sessionId',
+                            'activitySchedule', 'scheduleAnchorAt', 'scheduleVersion'])
           || roomAfter().actor == role
-          || (before.plannedEndTime is int
-            && before.plannedEndTime <= request.time.toMillis() + 120000
-            && after.currentActivity == 'home_idle' && after.startTime == null
-            && after.lastActivityTimestamp == before.plannedEndTime
-            && after.sessionVersion == before.sessionVersion + 1));
+          || scheduleMigration(before, after) || validAutomation(before, after));
     }
     function historyPreserved(before, after, liveDate) {
       let changes = after.diff(before);
@@ -49,19 +88,24 @@ service cloud.firestore {
       let growthDays = plant.get('stageGrowthDays', 0);
       let stage = data.currentStage - 1;
       let legacy = data.targetWater in [40, 55, 70, 85, 100];
-      let expected = [48, 69, 90, 111, 186][stage] + [1, 1, 1, 2, 0][stage] * growthDays;
+      let expected = [62, 72, 82, 92, 102, 112, 122, 132, 150][stage]
+        + (stage < 8 ? growthDays : 0);
       return data.targetWater is int && data.targetWater == plant.targetDrops
-        && ((version < 1 && legacy) || (version >= 1
+        && ((version < 1 && legacy) || (version == 1 && data.currentStage <= 5
           && growthDays is int && growthDays >= 0 && growthDays <= 20
-          && (stage < 4 || growthDays == 0)
-          && (data.targetWater == expected || (legacy && canRetainLegacyTarget))));
+          && (data.targetWater == [48,69,90,111,186][stage] + [1,1,1,2,0][stage] * growthDays
+            || (legacy && canRetainLegacyTarget))) || (version >= 2
+          && growthDays is int && growthDays >= 0 && growthDays <= 9
+          && (stage < 8 || growthDays == 0)
+          && (data.targetWater == expected || canRetainLegacyTarget)));
     }
     function validRoom(data, canRetainLegacyTarget) {
       return data.actor in ['ppa', 'tbv', 'system'] && data.revision is int && data.revision > 0
         && data.clientEvaluatedAt is timestamp && data.clientEvaluatedAt <= request.time + duration.value(2, 'm')
         && data.updatedAt == request.time && data.plant is map
-        && data.currentStage is int && data.currentStage >= 1 && data.currentStage <= 5
-        && data.streakDays is int && data.streakDays >= 0 && data.streakDays <= 21
+        && data.currentStage is int && data.currentStage >= 1 && data.currentStage <= 9
+        && data.streakDays is int && data.streakDays >= 0
+        && data.streakDays <= (data.plant.get('balanceVersion', 0) >= 2 ? 10 : 21)
         && validWaterTarget(data, canRetainLegacyTarget)
         && data.messages is list && data.messages.size() <= 160
         && getAfter(ppaPath()).data.diff(data.users.ppa).affectedKeys().hasOnly(['waterToday', 'questsDone', 'lastActive'])
@@ -77,6 +121,7 @@ service cloud.firestore {
         && request.resource.data.plant.get('wateringVersion', 0) >= resource.data.plant.get('wateringVersion', 0)
         && request.resource.data.plant.get('rewardProgressVersion', 0) >= resource.data.plant.get('rewardProgressVersion', 0)
         && request.resource.data.plant.get('balanceVersion', 0) >= resource.data.plant.get('balanceVersion', 0)
+        && request.resource.data.plant.get('activityScheduleVersion', 0) >= resource.data.plant.get('activityScheduleVersion', 0)
         && historyPreserved(resource.data.plant.waterHistoryByDate,
           request.resource.data.plant.waterHistoryByDate, resource.data.plant.date)
         && historyPreserved(resource.data.plant.historyStatusByDate,

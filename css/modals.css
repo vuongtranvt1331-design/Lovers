@@ -162,6 +162,16 @@ dialog[open] { animation: arrive 170ms ease-out both; }
 #partnerDialog input { scroll-margin-block: 64px 12px; }
 .message-controls .button { padding-inline: 10px; }
 #dock { display: grid; gap: 8px; }
+.activity-plan-header { display: flex; align-items: flex-start; gap: 6px; }
+.activity-slots { display: grid; flex: 1; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.activity-slots button { display: grid; gap: 2px; min-height: 62px; min-width: 0; padding: 5px 2px; border: 1px solid var(--edge); border-radius: 8px; color: var(--moss); background: var(--card); font-size: 10px; }
+.activity-slots button[aria-pressed="true"] { background: var(--butter); border-color: #C9B477; }
+.activity-slots strong { font-size: 12px; }
+.activity-slots time { font-variant-numeric: tabular-nums; }
+.activity-slots span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-plan-info { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.activity-plan-info p { flex: 1; min-width: 0; }
+.activity-plan-info .button { flex: 0 0 auto; padding-inline: 7px; font-size: 11px; }
 .dock-group { min-width: 0; padding: 7px; border: 1px solid var(--edge); border-radius: 8px; background: var(--card); }
 .dock-group h3 { margin-bottom: 5px; color: var(--moss); font-size: 11px; font-weight: 820; }
 .dock-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }

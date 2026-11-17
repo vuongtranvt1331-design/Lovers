@@ -1,4 +1,4 @@
-import { spriteURL } from "./catalog.js?v=notes-board";
+import { spriteURL } from "./catalog.js?v=activity-plan-nine";
 
 export const CanvasRenderer = (() => {
   const BACKGROUND = '#f4f8f3';
@@ -189,8 +189,8 @@ export const CanvasRenderer = (() => {
   }
 
   function bonsai(ctx, key, phase) {
-    const match = /^bonsai_0([1-5])_(healthy|dry)$/.exec(key);
-    const stage = match ? Number(match[1]) : 1;
+    const match = /^bonsai_0([1-9])_(healthy|dry)$/.exec(key);
+    const stage = match ? Math.ceil(Number(match[1]) / 2) : 1;
     const dry = match?.[2] === 'dry';
     const baseY = 61;
     const potWidth = [0, 27, 35, 40, 43, 47][stage];

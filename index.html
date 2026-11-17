@@ -7,9 +7,9 @@
 <meta name="theme-color" content="#F4F8F3">
 <title>Pocket Space</title>
 <link rel="stylesheet" href="./css/style.css">
-<link rel="stylesheet" href="./css/components.css?v=toolbar-tones">
-<link rel="stylesheet" href="./css/modals.css?v=bonsai-balance">
-<link rel="stylesheet" href="./css/notes.css?v=notes-board">
+<link rel="stylesheet" href="./css/components.css?v=activity-plan-nine">
+<link rel="stylesheet" href="./css/modals.css?v=activity-plan-nine">
+<link rel="stylesheet" href="./css/notes.css?v=activity-plan-nine">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -21,7 +21,7 @@
     </div>
     <button type="button" class="streak-badge" id="streakBadge" aria-controls="plant" aria-describedby="streakShortcutLabel syncStatus" title="Đến khu vườn bonsai">
       <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 5h2v8H5zM0 2h4v2h1v3H2V5H0zm8 0h1V0h3v3h-1v2H9v2H7V4h1z"></path></svg>
-      <span class="mono" id="streakBadgeText">0/21 ngày</span>
+      <span class="mono" id="streakBadgeText">0/10 ngày</span>
       <span class="sr-only" id="streakShortcutLabel">Đến khu vườn bonsai</span>
     </button>
     <button type="button" class="profile-button" id="profileButton" aria-haspopup="dialog" aria-labelledby="activeProfileName profileActionLabel">
@@ -119,10 +119,6 @@
             <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges"><path d="M5 5h2v8H5zM0 2h4v2h1v3H2V5H0zm8 0h1V0h3v3h-1v2H9v2H7V4h1z"></path></svg>
             7 ngày
           </span>
-          <span class="plant-milestone" data-day="14">
-            <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges"><path d="M5 1h2v3h3v2H7v3H5V6H2V4h3zM9 8h1v1h2v1h-2v2H9v-2H7V9h2z"></path></svg>
-            14 ngày
-          </span>
         </div>
       </div>
       <div class="plant-tools line between">
@@ -145,7 +141,7 @@
         <div class="water-streak">
           <div class="streak-summary line">
             <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 5h2v8H5zM0 2h4v2h1v3H2V5H0zm8 0h1V0h3v3h-1v2H9v2H7V4h1z"></path></svg>
-            <span id="streakText">Đã tích lũy 0/21 ngày đủ nước</span>
+            <span id="streakText">Đã tích lũy 0/10 ngày đủ nước</span>
           </div>
           <div class="streak-dots" id="streakDots" aria-hidden="true"></div>
           <p id="streakHint"></p>
@@ -241,8 +237,8 @@
     <button class="icon-button" type="button" id="plantGalleryClose" aria-label="Đóng bộ sưu tập">×</button>
   </header>
   <p class="muted small">Mỗi hàng là một giai đoạn. Cây xanh tốt ở bên trái, cây héo ở bên phải.</p>
-  <p class="streak-guide">Hai bạn cần tích lũy 21 ngày đủ nước để cây bước sang giai đoạn tiếp theo. Mỗi khoảng bên dưới là từ mốc khởi đầu đến mốc cao nhất của giai đoạn.</p>
-  <p id="galleryStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/21 ngày đủ nước</p>
+  <p class="streak-guide">Hai bạn cần tích lũy 10 ngày đủ nước để cây bước sang giai đoạn tiếp theo. Mỗi khoảng bên dưới là từ mốc khởi đầu đến mốc cao nhất của giai đoạn.</p>
+  <p id="galleryStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/10 ngày đủ nước</p>
   <div class="plant-gallery-grid" id="plantGalleryGrid"></div>
 </dialog>
 
@@ -251,11 +247,11 @@
     <div><p class="kicker">Khu vườn chung</p><h2 id="rulesHeading">Chăm bonsai thế nào?</h2></div>
     <button class="icon-button" type="button" id="rulesClose" aria-label="Đóng hướng dẫn">×</button>
   </header>
-  <p class="streak-guide">Hai bạn cần tích lũy 21 ngày đủ nước để cây bước sang giai đoạn phát triển tiếp theo.</p>
-  <p id="rulesStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/21 ngày đủ nước</p>
+  <p class="streak-guide">Hai bạn cần tích lũy 10 ngày đủ nước để cây bước sang giai đoạn phát triển tiếp theo.</p>
+  <p id="rulesStreak" class="streak-progress" aria-live="polite">Đã tích lũy 0/10 ngày đủ nước</p>
   <ul class="rule-list" id="plantRules">
     <li><strong>Tưới bonsai.</strong> Hoàn thành hoạt động hoặc nhiệm vụ để nhận giọt nước. Chạm vào cây để tưới toàn bộ số giọt bạn đang có. Chỉ nước đã tưới mới tính vào mục tiêu ngày.</li>
-    <li><strong>Thời gian cộng dồn.</strong> Các phiên của cùng một hoạt động cộng phút trong ngày. Khi đủ mốc, giọt thưởng vào kho của bạn. Phần phút còn dở từ các phiên đã kết thúc đặt lại lúc 00:00.</li>
+    <li><strong>Thời gian cộng dồn.</strong> Các phiên của cùng một hoạt động cộng phút trong ngày. Khi đủ mốc, giọt thưởng vào kho của bạn một lần cho mỗi hoạt động trong ngày. Phần phút còn dở từ các phiên đã kết thúc đặt lại lúc 00:00.</li>
     <li><strong>Ngủ.</strong> <span id="ruleSleep"></span></li>
     <li><strong>Học hoặc đọc.</strong> <span id="ruleStudy"></span></li>
     <li><strong>Tập trung làm việc.</strong> <span id="ruleFocus"></span></li>
@@ -266,8 +262,8 @@
     <li><strong>Focus Cùng Nhau.</strong> Khi hai bạn cùng học hoặc cùng làm việc trong ít nhất 80% thời lượng của một mốc thưởng, số giọt tăng 20%, làm tròn lên trong giới hạn ngày.</li>
     <li><strong>Mốc tưới tăng dần.</strong> <span id="ruleStageGrowth"></span></li>
     <li><strong>Cổ thụ.</strong> <span id="ruleStageMaintenance"></span></li>
-    <li><strong>Chốt ngày.</strong> Lúc 00:00 giờ Việt Nam, ứng dụng chốt ngày và cập nhật mốc tưới. Đủ 21 ngày tích lũy, cây lớn thêm một giai đoạn và dùng mốc khởi đầu mới. Sang ngày mới, cả nước chưa tưới và bộ đếm đã tưới về 0.</li>
-    <li>Mốc 7 và 14 ngày mở chồi mới và một khiên. Có thể giữ một khiên. Khi thiếu nước, khiên tự dùng để giữ tiến độ. Cây vẫn héo.</li>
+    <li><strong>Chốt ngày.</strong> Lúc 00:00 giờ Việt Nam, ứng dụng chốt ngày và cập nhật mốc tưới. Đủ 10 ngày tích lũy, cây lớn thêm một giai đoạn và dùng mốc khởi đầu mới. Sang ngày mới, cả nước chưa tưới và bộ đếm đã tưới về 0.</li>
+    <li>Mốc 7 ngày mở chồi mới và một khiên. Có thể giữ một khiên. Khi thiếu nước, khiên tự dùng để giữ tiến độ. Cây vẫn héo.</li>
     <li>Mỗi ngày thiếu nước khi hết khiên trừ 5 ngày tích lũy. Sau mỗi ba ngày thiếu nước liên tiếp, cây lùi một giai đoạn và tiến độ trở về 0. Giai đoạn thấp nhất là mầm hạt.</li>
   </ul>
   <h3 class="water-history-heading" id="waterHistoryHeading">Lịch sử tưới nước</h3>
@@ -293,11 +289,16 @@
   </div>
 </dialog>
 
-<dialog id="activityDialog" aria-labelledby="activityHeading">
-  <header class="dialog-title line between">
-    <div><p class="kicker">Sân khấu</p><h2 id="activityHeading">Chọn hoạt động</h2></div>
+<dialog id="activityDialog" aria-label="Lịch hoạt động ba giờ">
+  <header class="dialog-title activity-plan-header">
+    <nav id="activitySlots" class="activity-slots" aria-label="Mốc bắt đầu hoạt động">
+      <button type="button" data-slot="0" aria-pressed="true"><strong>Hiện tại</strong><time></time><span></span></button>
+      <button type="button" data-slot="1" aria-pressed="false"><strong>+1h</strong><time></time><span></span></button>
+      <button type="button" data-slot="2" aria-pressed="false"><strong>+2h</strong><time></time><span></span></button>
+    </nav>
     <button class="icon-button" type="button" id="activityClose" aria-label="Đóng chọn hoạt động">×</button>
   </header>
+  <div class="activity-plan-info"><p id="activityPlanHint" class="small muted" role="status"></p><button class="button" id="activityPlanCancel" type="button" hidden>Bỏ mốc này</button></div>
   <div id="dock"></div>
 </dialog>
 
@@ -330,6 +331,7 @@
     <button class="notes-avatar" id="notesTBV" type="button" aria-label="Sổ của TBV" aria-pressed="false"><img src="./assets/notes/tbv.png" alt="" width="28" height="28"></button>
     <button class="notes-date" id="notesNextDate" type="button"></button>
     <button class="notes-arrow" id="notesNext" type="button" aria-label="Ngày sau">›</button>
+    <button class="icon-button" id="notesClose" type="button" aria-label="Đóng sổ ghi chú">×</button>
   </nav>
   <div id="notesDateFallback" class="notes-date-fallback" hidden>
     <label for="notesDatePicker" class="sr-only">Ngày ghi chú</label>
@@ -346,9 +348,8 @@
       <input id="notesInput" type="text" maxlength="100" autocomplete="off" placeholder="Thêm một việc…" required>
       <button class="button primary" id="notesAdd" type="submit">Thêm</button>
     </form>
-    <button class="icon-button" id="notesClose" type="button" aria-label="Đóng sổ ghi chú">×</button>
   </footer>
 </dialog>
-<script type="module" src="./js/app.js?v=notes-board"></script>
+<script type="module" src="./js/app.js?v=activity-plan-nine"></script>
 </body>
 </html>

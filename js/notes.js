@@ -1,4 +1,4 @@
-import { PocketDB } from "./db.js?v=notes-board";
+import { PocketDB } from "./db.js?v=activity-plan-nine";
 import { DAY_MS, GAME_TIME_ZONE, dateStart, offsetDay, today } from "./gameTime.js";
 
 const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];

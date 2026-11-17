@@ -1,15 +1,15 @@
 import {
   ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS,
-  STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO,
-  DAILY_WATER_MAX_PER_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
-} from "./catalog.js?v=notes-board";
+  STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO, STAGE_PROGRESSION_DAYS,
+  DAILY_WATER_MAX_BY_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
+} from "./catalog.js?v=activity-plan-nine";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=notes-board";
-import { FocusState } from "./state.js?v=notes-board";
-import { Timeline } from "./timeline.js?v=notes-board";
-import { createQuestDrawer } from "./quests.js?v=notes-board";
-import { createNotesDrawer } from "./notes.js?v=notes-board";
-import { PocketDB } from "./db.js?v=notes-board";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=activity-plan-nine";
+import { FocusState } from "./state.js?v=activity-plan-nine";
+import { Timeline } from "./timeline.js?v=activity-plan-nine";
+import { createQuestDrawer } from "./quests.js?v=activity-plan-nine";
+import { createNotesDrawer } from "./notes.js?v=activity-plan-nine";
+import { PocketDB } from "./db.js?v=activity-plan-nine";
 import { offsetDay } from "./gameTime.js";
 
 const FocusUI = (() => {
@@ -27,14 +27,15 @@ const FocusUI = (() => {
     "waterHistory", "partnerCanvas", "partnerPoke", "partnerName", "partnerActivity", "partnerElapsed", "speechBubble", "partnerEffects",
     "partnerDialog", "partnerClose", "messageForm", "messageInput", "quickActions", "ownCanvas",
     "ownPoke", "ownName", "ownActivity", "ownElapsed", "ownEffects", "timerStatus", "activityDialog", "activityClose", "dock",
+    "activitySlots", "activityPlanHint", "activityPlanCancel",
     "historyButton", "historyDialog", "historyClose", "appStatus", "togetherStatus", "togetherElapsed", "plant",
     "questDrawer", "questOpen", "questClose", "notesOpen",
     "topBar", "syncStatus", "syncButton",
     "coupleQuestDialog", "coupleQuestClose", "coupleQuestText", "coupleQuestAccept", "coupleQuestDecline",
   ].map(id => [id, byId(id)]));
   const names = { ppa: "PPA", tbv: "TBV" };
-  const plantNames = ["Mầm hạt", "Chồi non", "Bonsai mini", "Đơm hoa", "Cổ thụ"];
-  const streakGoal = 21;
+  const plantNames = ["Mầm hạt", "Mầm vươn", "Chồi non", "Uốn cành", "Bonsai mini", "Kết nụ", "Đơm hoa", "Nở rộ", "Cổ thụ"];
+  const streakGoal = STAGE_PROGRESSION_DAYS;
   const quick = { heart: "❤️ Gửi bạn một trái tim", kiss: "💋 Mwah!", bonk: "🥊 Bonk!" };
   const localDate = new Intl.DateTimeFormat("vi-VN", {
     timeZone: "Asia/Ho_Chi_Minh", weekday: "short", day: "2-digit", month: "2-digit",
@@ -72,6 +73,10 @@ const FocusUI = (() => {
   let selectedQuest = null;
   let hydratedRemote = false;
   let lockedScroll = null;
+  let selectedActivitySlot = 0;
+  let activityPlanAnchor = null;
+  let savingActivity = false;
+  const planClock = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
   const partner = () => profile === "ppa" ? "tbv" : "ppa";
 
@@ -151,6 +156,8 @@ const FocusUI = (() => {
     plantScene.dataset.milestone = String(plant.visualMilestone ?? 0);
     plantScene.dataset.stage = String(stage);
     plantScene.dataset.wilted = String(dry);
+    plantScene.dataset.evolved = String(currentDay && !dry && plant.stageEvolutionAt != null
+      && FocusState.today(plant.stageEvolutionAt) === plant.date && plant.stageEvolutionFrom < stage);
     ui.plantStage.textContent = "Giai đoạn " + stage + " · " + plantNames[stage - 1];
     ui.partnerWater.textContent = names[partner()] + " · " + other + " 💧";
     ui.ownWater.textContent = names[profile] + " · " + own + " 💧";
@@ -241,7 +248,7 @@ const FocusUI = (() => {
     ui.streakText.textContent = label;
     ui.streakBadgeText.textContent = days + "/" + streakGoal + " ngày";
     if (days === streakGoal && todayMet && !finalStage) {
-      ui.streakHint.textContent = "Đủ ngày thứ 21 · 00:00 lên Giai đoạn " + (stage + 1)
+      ui.streakHint.textContent = "Đủ ngày thứ " + streakGoal + " · 00:00 lên Giai đoạn " + (stage + 1)
         + " với mốc " + STAGE_TARGETS[stage] + " giọt.";
     } else if (todayMet) {
       const growthDays = Math.min(STAGE_GROWTH_DAY_CAP, (plant.stageGrowthDays ?? 0) + 1);
@@ -411,23 +418,23 @@ const FocusUI = (() => {
     const [shortSleep, fullSleep] = sleep.tiers;
     const { out_running, out_gym, home_cooking, home_chores } = WATER_ACTIVITY_MINUTES;
     const rewardSummary = ({ minutes, reward, cap }) =>
-      reward + " giọt mỗi " + minutes + " phút, tối đa " + cap + " giọt mỗi người mỗi ngày.";
-    ui.ruleSleep.textContent = "Cộng thời lượng các giấc ngủ kết thúc trong ngày. Khi thức dậy, đủ "
+      "Đủ " + minutes + " phút nhận " + reward + " giọt. Mỗi hoạt động nhận một lần/ngày; cả nhóm tối đa " + cap + " giọt, gồm thưởng cùng nhịp.";
+    ui.ruleSleep.textContent = "Cộng thời lượng các giấc ngủ kết thúc trong ngày. Lần thức dậy đầu tiên đạt mốc sẽ nhận thưởng: đủ "
       + shortSleep.minutes / 60 + " giờ nhận " + shortSleep.reward + " giọt, đủ "
-      + fullSleep.minutes / 60 + " giờ nhận tổng cộng " + fullSleep.reward + " giọt.";
+      + fullSleep.minutes / 60 + " giờ nhận " + fullSleep.reward + " giọt. Nhận một lần mỗi ngày.";
     ui.ruleStudy.textContent = rewardSummary(study);
     ui.ruleFocus.textContent = rewardSummary(focus);
     ui.ruleSport.textContent = "Chạy " + out_running + " phút hoặc tập gym " + out_gym
-      + " phút nhận " + sport.reward + " giọt. Hai hoạt động dùng chung giới hạn " + sport.cap + " giọt mỗi người mỗi ngày.";
+      + " phút nhận " + sport.reward + " giọt. Mỗi hoạt động nhận một lần/ngày, tổng tối đa " + sport.cap + " giọt mỗi người.";
     ui.ruleChores.textContent = "Nấu " + home_cooking + " phút hoặc dọn " + home_chores
-      + " phút nhận " + chores.reward + " giọt. Hai hoạt động dùng chung giới hạn " + chores.cap + " giọt mỗi người mỗi ngày.";
-    ui.ruleStageGrowth.textContent = "Giai đoạn 1–4 bắt đầu ở " + STAGE_TARGETS.slice(0, -1).join(", ")
+      + " phút nhận " + chores.reward + " giọt. Mỗi hoạt động nhận một lần/ngày, tổng tối đa " + chores.cap + " giọt mỗi người.";
+    ui.ruleStageGrowth.textContent = "Giai đoạn 1–8 bắt đầu ở " + STAGE_TARGETS.slice(0, -1).join(", ")
       + " giọt. Sau mỗi ngày tưới đủ, mốc ngày kế tiếp tăng lần lượt " + STAGE_DAILY_INCREASES.slice(0, -1).join(", ")
-      + " giọt, tối đa " + STAGE_GROWTH_DAY_CAP + " lần mỗi giai đoạn. Ngày thiếu nước giữ nguyên mốc nếu cây chưa lùi giai đoạn.";
-    ui.ruleStageMaintenance.textContent = "Giai đoạn 5 giữ mốc " + STAGE_TARGETS.at(-1)
+      + " giọt, tối đa " + STAGE_GROWTH_DAY_CAP + " lần mỗi giai đoạn. Mất 5 ngày tiến độ thì mốc nước giảm tương ứng; khiên giữ cả tiến độ và mốc nước.";
+    ui.ruleStageMaintenance.textContent = "Giai đoạn 9 giữ mốc " + STAGE_TARGETS.at(-1)
       + " giọt mỗi ngày. Mốc này bằng " + Math.round(STAGE_MAINTENANCE_RATIO * 100) + "% của "
-      + DAILY_WATER_MAX + " giọt tối đa cho cả hai, làm tròn lên. Mỗi người có thể nhận tối đa "
-      + DAILY_WATER_MAX_PER_PROFILE + " giọt mỗi ngày.";
+      + DAILY_WATER_MAX + " giọt tối đa cho cả hai, làm tròn lên. Tối đa mỗi ngày: PPA "
+      + DAILY_WATER_MAX_BY_PROFILE.ppa + " giọt, TBV " + DAILY_WATER_MAX_BY_PROFILE.tbv + " giọt.";
   }
 
   function openPlantRules() {
@@ -477,8 +484,8 @@ const FocusUI = (() => {
     }
     for (const button of activityButtons) {
       button.hidden = !canSelectActivity(profile, button.dataset.activity);
-      button.setAttribute("aria-pressed", String(button.dataset.activity === own.currentActivity));
     }
+    renderActivitySlots();
   }
 
   function renderTimer(now = Date.now()) {
@@ -488,6 +495,8 @@ const FocusUI = (() => {
       label = "Chọn một hoạt động để bắt đầu phiên.";
     } else if (!info.category) {
       label = "Hoạt động này không nhận nước tưới.";
+    } else if (info.claimedToday) {
+      label = "Đã nhận nước cho hoạt động này hôm nay. Đồng hồ vẫn tiếp tục.";
     } else if (info.cap != null && info.creditedToday >= info.cap) {
       label = "Đã nhận đủ " + info.cap + " giọt cho nhóm này hôm nay.";
     } else if (info.wakeOnly) {
@@ -694,6 +703,44 @@ const FocusUI = (() => {
     }
   }
 
+  function renderActivitySlots(now = Date.now()) {
+    const user = FocusState.data.users[profile];
+    const plan = user.activitySchedule ?? [];
+    if (plan.length && user.scheduleAnchorAt != null) activityPlanAnchor = user.scheduleAnchorAt;
+    const selected = plan.find(entry => entry.slot === selectedActivitySlot);
+    const start = selectedActivitySlot ? activityPlanAnchor + selectedActivitySlot * 3600000 : now;
+    for (const button of ui.activitySlots.children) {
+      const slot = Number(button.dataset.slot);
+      const entry = plan.find(item => item.slot === slot);
+      const at = slot ? activityPlanAnchor + slot * 3600000 : now;
+      button.setAttribute("aria-pressed", String(slot === selectedActivitySlot));
+      button.querySelector("time").textContent = planClock.format(at);
+      button.querySelector("time").dateTime = new Date(at).toISOString();
+      button.querySelector("span").textContent = slot ? (entry ? ACTIVITY_TITLES.get(entry.activity) : "Chưa đặt") : ACTIVITY_TITLES.get(user.currentActivity);
+      button.title = button.querySelector("span").textContent;
+      button.disabled = savingActivity || (slot > 0 && at <= now);
+    }
+    const chosen = selectedActivitySlot ? selected?.activity : user.currentActivity;
+    for (const button of activityButtons) {
+      button.setAttribute("aria-pressed", String(button.dataset.activity === chosen));
+      button.disabled = savingActivity || (selectedActivitySlot > 0 && start <= now);
+    }
+    ui.activityPlanHint.textContent = selectedActivitySlot === 0
+      ? "Đổi ngay. Hoạt động tiếp tục chạy sau khi nhận nước."
+      : start <= now ? "Mốc này đã qua. Mở lại để đặt lịch mới."
+        : "Tự chuyển lúc " + planClock.format(start) + ". Chọn một hoạt động bên dưới để lưu.";
+    ui.activityPlanCancel.hidden = !selected;
+    ui.activityPlanCancel.disabled = savingActivity;
+  }
+
+  function openActivityPlan() {
+    selectedActivitySlot = 0;
+    const user = FocusState.data.users[profile];
+    activityPlanAnchor = user.activitySchedule?.length ? user.scheduleAnchorAt : Date.now();
+    renderActivitySlots();
+    openDialog(ui.activityDialog);
+  }
+
   function buildDock() {
     for (const [title, activities] of ACTIVITY_GROUPS) {
       const group = document.createElement("section");
@@ -714,13 +761,22 @@ const FocusUI = (() => {
         caption.textContent = name;
         button.append(glyph, caption);
         button.addEventListener("click", async () => {
+          if (savingActivity) return;
           const user = profile;
-          const version = FocusState.data.users[user].sessionVersion;
-          if (await commit(() => FocusState.changeActivity(user, id, Date.now(), version))) {
-            ui.activityDialog.close();
-          } else if (canAct() && FocusState.data.users[user].sessionVersion !== version) {
-            showActionStatus("Hoạt động vừa đổi trên thiết bị khác. Đã tải trạng thái mới nhất.");
-          }
+          const current = FocusState.data.users[user];
+          const slot = selectedActivitySlot;
+          const at = Date.now();
+          if (slot === 0 && current.currentActivity === id) { ui.activityDialog.close(); return; }
+          savingActivity = true;
+          renderActivitySlots();
+          try {
+            const saved = slot === 0
+              ? await commit(() => FocusState.changeActivity(user, id, at, current.sessionVersion))
+              : await commit(() => FocusState.scheduleActivity(user, id, activityPlanAnchor + slot * 3600000,
+                slot, activityPlanAnchor, at, current.scheduleVersion));
+            if (saved && slot === 0) ui.activityDialog.close();
+            else if (!saved && canAct()) showActionStatus("Lịch vừa thay đổi hoặc mốc giờ đã qua. Hãy chọn lại.");
+          } finally { savingActivity = false; renderActivitySlots(); }
         });
         grid.append(button);
         activityButtons.push(button);
@@ -739,6 +795,7 @@ const FocusUI = (() => {
     labelDate(now);
     renderClocks(now);
     renderTimer(now);
+    if (ui.activityDialog.open) renderActivitySlots(now);
     if (FocusState.today(now) !== plantRenderDay) {
       renderPlant(now);
       if (ui.rulesDialog.open) renderWaterHistory();
@@ -863,7 +920,22 @@ const FocusUI = (() => {
     updateViewport();
     ui.wiltToastClose.addEventListener("click", hideWiltToast);
     ui.partnerPoke.addEventListener("click", () => { feedback(ui.partnerPoke); openDialog(ui.partnerDialog); });
-    ui.ownPoke.addEventListener("click", () => { feedback(ui.ownPoke); openDialog(ui.activityDialog); });
+    ui.ownPoke.addEventListener("click", () => { feedback(ui.ownPoke); openActivityPlan(); });
+    ui.activitySlots.addEventListener("click", event => {
+      const button = event.target.closest("[data-slot]");
+      if (!button || button.disabled) return;
+      selectedActivitySlot = Number(button.dataset.slot);
+      renderActivitySlots();
+    });
+    ui.activityPlanCancel.addEventListener("click", async () => {
+      if (savingActivity) return;
+      const user = profile;
+      const version = FocusState.data.users[user].scheduleVersion;
+      savingActivity = true;
+      renderActivitySlots();
+      try { await commit(() => FocusState.cancelScheduledActivity(user, selectedActivitySlot, Date.now(), version)); }
+      finally { savingActivity = false; renderActivitySlots(); }
+    });
     for (const [button, dialog] of [[ui.profileClose, ui.profileDialog], [ui.rulesClose, ui.rulesDialog],
       [ui.plantGalleryClose, ui.plantGallery], [ui.plantWaterClose, ui.plantWaterDialog],
       [ui.partnerClose, ui.partnerDialog], [ui.activityClose, ui.activityDialog]]) {

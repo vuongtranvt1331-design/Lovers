@@ -10,16 +10,16 @@
 .notes-days, .notes-date-fallback, .notes-status, .notes-footer { flex: 0 0 auto; }
 
 .notes-days {
-  --notes-gap: 2px;
-  --notes-arrow: clamp(24px, 6.8vw, 32px);
-  --notes-avatar: clamp(29px, 8.2vw, 36px);
+  --notes-gap: clamp(1px, .35vw, 2px);
+  --notes-arrow: clamp(20px, 6vw, 26px);
+  --notes-avatar: clamp(24px, 7vw, 30px);
   --earlier: 1fr;
   --selected: 1.4fr;
   --later: 1fr;
   display: grid;
   grid-template-columns: var(--notes-arrow) minmax(0, var(--earlier))
     var(--notes-avatar) minmax(0, var(--selected)) var(--notes-avatar)
-    minmax(0, var(--later)) var(--notes-arrow);
+    minmax(0, var(--later)) var(--notes-arrow) var(--tap-target);
   gap: var(--notes-gap);
 }
 .notes-days:has(#notesPreviousDate[aria-current="date"]) { --earlier: 1.4fr; --selected: 1fr; }
@@ -37,6 +37,7 @@
 .notes-days button:not(:disabled):hover { background: var(--notes-fill); }
 .notes-days button:focus-visible { outline-offset: -3px; }
 .notes-arrow { font-size: 21px; line-height: 1; }
+.notes-days #notesClose { width: var(--tap-target); min-width: var(--tap-target); font-size: 19px; }
 .notes-date {
   white-space: nowrap;
   font-size: clamp(9px, 2.8vw, 11px);
@@ -148,6 +149,10 @@ label.notes-entry { cursor: pointer; }
 }
 .notes-delete:not(:disabled):hover { background: var(--notes-fill); color: #783D48; }
 .notes-entry input[aria-disabled="true"], .notes-delete[aria-disabled="true"] { opacity: .55; cursor: progress; }
+
+@media (max-width: 340px) {
+  .notes-days { margin-inline: -10px; }
+}
 
 @media (hover: none) and (pointer: coarse) {
   .notes-drawer[open]:has(#notesInput:focus, #notesDatePicker:focus) {

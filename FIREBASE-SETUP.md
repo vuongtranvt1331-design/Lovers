@@ -12,7 +12,7 @@ Từ thư mục bản Git Lovers, người quản trị Firebase có thể công
 
 Nếu dự án có thêm ứng dụng khác, kiểm tra và hợp nhất quy tắc của các ứng dụng trước khi công bố.
 
-Công bố bộ quy tắc này trước khi đưa Sổ ghi chú đôi lên Pages. Bộ quy tắc cấp quyền cho cả hai hồ sơ sử dụng sổ của nhau và bảo vệ dữ liệu các ngày đã chốt. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
+Công bố bộ quy tắc này trước khi đưa bản lịch hoạt động và 9 cấp bonsai lên Pages. Quy tắc cho phép chuyển hoạt động theo lịch đã lưu, chặn bản cũ ghi đè lịch và hỗ trợ mục tiêu nước mới. Bộ quy tắc cũng cấp quyền cho cả hai hồ sơ sử dụng sổ của nhau và bảo vệ dữ liệu các ngày đã chốt. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
 
 ## 2. Đưa mã lên GitHub Pages
 
@@ -42,7 +42,9 @@ Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic vớ
 
 - pocket_space/plant_state chứa trạng thái chung và bản sao hai hồ sơ để đồng bộ trong cùng một snapshot.
 - Giọt nước từ hoạt động và nhiệm vụ nằm trong kho riêng của mỗi hồ sơ. Một lần tưới dùng hết kho của hồ sơ đó. Chỉ số đã tưới tính vào mục tiêu và lịch sử. Kho và tiến độ tưới của ngày đặt lại lúc 00:00 giờ Việt Nam.
-- Phút của các phiên ngắn được cộng theo từng hoạt động trong ngày. Khi đủ mốc, lượt thưởng và số giọt được ghi trong cùng một giao dịch.
+- Phút của các phiên ngắn được cộng theo từng hoạt động trong ngày. Khi đủ mốc, lượt thưởng và số giọt được ghi trong cùng một giao dịch. activityRewardClaims chặn nhận trùng khi làm lại cùng hoạt động trong ngày.
+- activitySchedule, scheduleAnchorAt và scheduleVersion trong mỗi hồ sơ lưu hai mốc tương lai. nextRewardAt là mốc nhận nước riêng, không kết thúc hoạt động. historyLoggedThrough giữ lịch sử đầy đủ khi hoạt động kéo dài nhiều ngày.
+- Bonsai balanceVersion 2 có 9 cấp, mỗi cấp 10 ngày. activityScheduleVersion chặn phiên bản cũ làm mất lịch. stageEvolutionAt ghi nhận ngày tiến hóa để hiển thị nền sáng.
 - pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
 - pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
 - pocket_space/notes_state/days lưu danh sách ghi chú theo hồ sơ và ngày. Việc còn dở được chuyển vào ngày hiện tại khi mở lại sổ. Danh sách của ngày trước giữ kết quả đã chốt.
