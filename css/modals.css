@@ -1,7 +1,9 @@
 dialog {
-  width: min(430px, calc(100% - 16px));
-  max-height: min(85vh, 760px);
-  max-height: min(85dvh, 760px);
+  inset-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+  inset-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px);
+  width: min(430px, calc(100% - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  max-height: min(85vh, 760px, calc(100vh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))));
+  max-height: min(85dvh, 760px, calc(100dvh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))));
   padding: 0 12px 12px;
   color: var(--ink);
   background: var(--cream);
@@ -36,17 +38,17 @@ dialog[open] { animation: arrive 170ms ease-out both; }
 }
 .profile-dialog {
   position: fixed;
-  inset: 0 0 auto;
+  inset-block: 0 auto;
   margin: 0 auto;
   border-radius: 0 0 var(--corner) var(--corner);
   padding-top: max(10px, env(safe-area-inset-top));
 }
 .bottom-drawer {
   position: fixed;
-  inset: auto 0 0;
+  inset-block: auto 0;
   margin: 0 auto;
-  height: min(88vh, 720px);
-  height: min(88dvh, 720px);
+  height: min(88vh, 720px, calc(100vh - max(8px, env(safe-area-inset-top))));
+  height: min(88dvh, 720px, calc(100dvh - max(8px, env(safe-area-inset-top))));
   max-height: none;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
   border-radius: var(--corner) var(--corner) 0 0;
@@ -288,8 +290,8 @@ button.timeline-cell:hover, .timeline-cell[aria-pressed="true"] { background: #F
     inset-block-start: calc(var(--visual-viewport-top, 0px) + max(8px, env(safe-area-inset-top)));
     inset-block-end: auto;
     margin-block: 0;
-    max-height: calc(100vh - 16px);
-    max-height: max(0px, calc(var(--visual-viewport-height, 100dvh) - max(8px, env(safe-area-inset-top)) - 8px));
+    max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    max-height: max(0px, calc(var(--visual-viewport-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))));
   }
 }
 @media (prefers-reduced-motion: reduce) {

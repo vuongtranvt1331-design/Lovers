@@ -24,6 +24,12 @@ Nhánh pocket-space-sync dựa trên main của Lovers và giữ bai-31.json hi�
 
 Mở pull request về main và hợp nhất. Trong **Settings → Pages**, dùng **Deploy from a branch → main → /(root)**. Khi triển khai xong, mở [Pocket Space trên Lovers](https://vuongtranvt1331-design.github.io/Lovers/) trên hai máy. Chọn hồ sơ rồi thử đổi hoạt động ở một máy để kiểm tra máy kia thấy cập nhật.
 
+## Cài trên iPhone
+
+Bản Pages có HTTPS, manifest, Apple Touch Icon và service worker. Trong Safari chọn **Chia sẻ → Thêm vào Màn hình chính → Thêm**; bật **Mở dưới dạng ứng dụng web** nếu iOS hiện tùy chọn này. Hướng dẫn cũng nằm trong menu chọn hồ sơ của app. Xem thêm [hướng dẫn chính thức của Apple](https://support.apple.com/vi-vn/guide/iphone/iphea86e5236/ios).
+
+Phát hành cả `manifest.webmanifest`, `sw.js`, `css/pwa.css`, `js/pwa.js` và `assets/icons/` cùng mã ứng dụng. Bản cài cần mở lần đầu khi có mạng để lấy dữ liệu; không cần đổi quyền Firebase chỉ để cài trên iOS. App giữ nguyên cách chọn PPA/TBV công khai.
+
 ## Chạy và kiểm thử local
 
 Mở Mo-Pocket-Space.bat hoặc chạy lệnh sau.
@@ -49,5 +55,5 @@ Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic vớ
 - pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
 - pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
 - pocket_space/notes_state/days lưu danh sách ghi chú theo hồ sơ và ngày. Việc còn dở được chuyển vào ngày hiện tại khi mở lại sổ. Danh sách của ngày trước giữ kết quả đã chốt.
-- Notes notesVersion 2 lưu taskOrder và pinnedId. carriedIds/carriedTo trên nguồn cũ giữ tiến độ chuyển từng phần khi hôm nay đủ 300 mục, tránh phục hồi lại mục đã chủ động xóa. Bộ đếm trong khung cây chỉ hiển thị kho chưa tưới của hồ sơ hiện tại; thanh xanh biển chỉ tính nước đã tưới.
+- Notes notesVersion 2 lưu taskOrder và pinnedId. carriedIds/carriedTo trên nguồn cũ giữ tiến độ chuyển từng phần khi hôm nay đủ 300 mục, tránh phục hồi lại mục đã chủ động xóa. Bộ đếm trong khung cây chỉ hiển thị kho chưa tưới của hồ sơ hiện tại; thanh nước chỉ tính lượng đã tưới, hồng bên trái và xanh biển bên phải.
 - Firestore giữ dữ liệu đã đọc khi mất mạng. Thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Lịch sử IndexedDB của bản cũ vẫn ở trình duyệt gốc.

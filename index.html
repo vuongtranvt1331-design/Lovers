@@ -5,11 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#F4F8F3">
+<meta name="application-name" content="Pocket Space">
+<meta name="description" content="Không gian nhỏ của PPA và TBV: cùng sinh hoạt, ghi chú và chăm bonsai mỗi ngày.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pocket Space">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
 <title>Pocket Space</title>
-<link rel="stylesheet" href="./css/style.css?v=daily-priority">
-<link rel="stylesheet" href="./css/components.css?v=daily-priority">
-<link rel="stylesheet" href="./css/modals.css?v=daily-priority">
-<link rel="stylesheet" href="./css/notes.css?v=daily-priority">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/apple-touch-icon.png">
+<link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/icon-192.png">
+<link rel="stylesheet" href="./css/style.css?v=pocket-ios-1">
+<link rel="stylesheet" href="./css/components.css?v=pocket-ios-1">
+<link rel="stylesheet" href="./css/modals.css?v=pocket-ios-1">
+<link rel="stylesheet" href="./css/notes.css?v=pocket-ios-1">
+<link rel="stylesheet" href="./css/pwa.css?v=pocket-ios-1">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -223,7 +235,32 @@
     </button>
   </div>
   <button class="button profile-reconnect" id="syncButton" type="button" hidden>Kiểm tra lại kết nối</button>
+  <button class="button install-open" id="installOpen" type="button" aria-haspopup="dialog" aria-controls="installDialog">Cài lên màn hình chính</button>
 </dialog>
+
+<dialog id="installDialog" aria-labelledby="installHeading">
+  <header class="dialog-title line between">
+    <h2 id="installHeading">Pocket Space trên điện thoại</h2>
+    <button class="icon-button" id="installClose" type="button" aria-label="Đóng hướng dẫn cài đặt">×</button>
+  </header>
+  <div class="install-brand"><img src="./assets/icons/apple-touch-icon.png" width="64" height="64" alt=""><strong>Pocket Space</strong></div>
+  <p id="installState" class="small muted"></p>
+  <ol class="install-steps" id="iosInstallSteps">
+    <li>Mở trang Pocket Space bằng <strong>Safari</strong>.</li>
+    <li>Bấm <strong>Chia sẻ</strong> <svg class="share-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 7H3v11h14V7h-3M10 13V1m-4 4 4-4 4 4"/></svg>, rồi chọn <strong>Thêm vào Màn hình chính</strong>.</li>
+    <li>Nếu có mục <strong>Mở dưới dạng ứng dụng web</strong>, bật mục này và bấm <strong>Thêm</strong>.</li>
+  </ol>
+  <p class="small muted" id="otherInstallHelp" hidden>Trên Android hoặc máy tính, chọn Cài ứng dụng trong menu trình duyệt.</p>
+  <button class="button primary install-native" id="installNative" type="button" hidden>Cài Pocket Space</button>
+  <p class="install-cache small" id="offlineReady" role="status">Đang chuẩn bị bộ nhớ mở lại ứng dụng…</p>
+  <p class="small muted">Mở app một lần khi có mạng để tải dữ liệu. Khi mất mạng, bạn có thể xem dữ liệu đã lưu; đổi hoạt động, ghi chú và tưới cây cần kết nối để đồng bộ.</p>
+</dialog>
+
+<aside class="pwa-update" id="appUpdate" aria-label="Bản cập nhật Pocket Space" hidden>
+  <div><strong>Có bản Pocket Space mới</strong><p class="small">Lưu phần đang nhập trước khi tải lại.</p></div>
+  <button class="button" id="applyUpdate" type="button">Tải lại</button>
+  <button class="icon-button" id="dismissUpdate" type="button" aria-label="Để sau">×</button>
+</aside>
 
 <dialog id="plantWaterDialog" aria-labelledby="plantWaterHeading" aria-describedby="plantWaterDescription">
   <header class="dialog-title line between">
@@ -353,6 +390,7 @@
     </form>
   </footer>
 </dialog>
-<script type="module" src="./js/app.js?v=daily-priority"></script>
+<script type="module" src="./js/pwa.js?v=pocket-ios-1"></script>
+<script type="module" src="./js/app.js?v=pocket-ios-1"></script>
 </body>
 </html>

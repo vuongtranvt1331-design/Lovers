@@ -1,0 +1,18 @@
+{
+  "id": "/Lovers/",
+  "name": "Pocket Space",
+  "short_name": "Pocket Space",
+  "description": "Không gian nhỏ của PPA và TBV: sinh hoạt, ghi chú và chăm bonsai cùng nhau.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4F8F3",
+  "theme_color": "#F4F8F3",
+  "categories": ["lifestyle", "productivity", "games"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "./assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -192,7 +192,7 @@ label.notes-entry { cursor: pointer; }
 
 @media (hover: none) and (pointer: coarse) {
   .notes-drawer[open]:has(#notesInput:focus, #notesDatePicker:focus) {
-    --notes-keyboard-height: min(88dvh, 720px, max(0px, calc(var(--visual-viewport-height, 100dvh) - 8px)));
+    --notes-keyboard-height: min(88dvh, 720px, max(0px, calc(var(--visual-viewport-height, 100dvh) - max(8px, env(safe-area-inset-top)))));
     inset-block-start: calc(var(--visual-viewport-top, 0px) + var(--visual-viewport-height, 100dvh) - var(--notes-keyboard-height));
     inset-block-end: auto;
     height: var(--notes-keyboard-height);

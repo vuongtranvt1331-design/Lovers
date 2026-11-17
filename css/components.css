@@ -245,6 +245,7 @@
 .water-side.own { justify-content: flex-end; text-align: end; }
 .water-side strong { color: var(--ink); font-size: 12px; }
 .water-side .drop { width: 8px; height: 10px; }
+.water-side:not(.own) .drop { background: var(--water-pink); }
 .water-total { font-size: 12px; color: var(--moss); white-space: nowrap; }
 .water-total .drop { width: 8px; height: 10px; vertical-align: -.02em; color: #519584; }
 .water-meter {
@@ -264,7 +265,7 @@
   max-width: 100%;
   transition: width 180ms ease-out;
 }
-.water-segment.partner { left: 0; background: var(--water-blue); }
+.water-segment.partner { left: 0; background: var(--water-pink); }
 .water-segment.own { right: 0; background: var(--water-blue); }
 .water-meter::after {
   content: '';
