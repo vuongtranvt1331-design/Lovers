@@ -1,5 +1,6 @@
-import { PocketDB } from "./db.js?v=activity-plan-nine";
+import { PocketDB } from "./db.js?v=daily-priority";
 import { DAY_MS, GAME_TIME_ZONE, dateStart, offsetDay, today } from "./gameTime.js";
+import { createFocusNote } from "./focusNote.js?v=daily-priority";
 
 const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const RESERVED_ROWS = 8;
@@ -24,6 +25,13 @@ export function createNotesDrawer(currentProfile, canAct) {
   let connected = false;
   let rolledDay = "";
   let rollover;
+  let rolloverAgain = false;
+  let remainingByOwner = { ppa: 0, tbv: 0 };
+  let announcement = "";
+  let expandedId = null;
+  let drag = null;
+  let suppressedClickUntil = 0;
+  const focusNote = createFocusNote(currentProfile, canAct, open);
 
   const editable = () => selected >= currentDay && !snapshot.archived;
   const writable = () => editable() && canAct() && phase === "ready" && !snapshot.fromCache;
@@ -51,8 +59,19 @@ export function createNotesDrawer(currentProfile, canAct) {
       }
       const start = dateStart(date);
       const weekday = WEEKDAYS[new Date(start + DAY_MS / 2).getUTCDay()];
-      button.textContent = (isToday ? "*" + weekday + "*" : weekday)
-        + " " + date.slice(8) + "/" + date.slice(5, 7);
+      const weekdayLabel = document.createElement("span");
+      weekdayLabel.className = "notes-weekday";
+      weekdayLabel.textContent = (isToday ? "*" + weekday + "*" : weekday) + " ";
+      const dateLabel = document.createElement("span");
+      dateLabel.className = "notes-short-date";
+      dateLabel.textContent = date.slice(8) + "/" + date.slice(5, 7);
+      button.replaceChildren(weekdayLabel, dateLabel);
+      if (button === ui.centerDate && date.slice(0, 4) !== currentDay.slice(0, 4)) {
+        const year = document.createElement("span");
+        year.className = "notes-year";
+        year.textContent = date.slice(0, 4);
+        button.append(year);
+      }
       button.setAttribute("aria-label", longDate.format(start) + (isToday ? " · Hôm nay" : "")
         + (button === ui.centerDate ? " · Chọn ngày khác" : ""));
     }
@@ -64,10 +83,13 @@ export function createNotesDrawer(currentProfile, canAct) {
     if (!message && phase === "error") message = "Chưa tải được ghi chú. Hãy mở lại sổ để thử.";
     if (!message && (phase === "loading" || snapshot.fromCache)) message = "Đang tải ghi chú…";
     if (!message && pending) message = "Đang lưu…";
+    if (!message && remainingByOwner[owner] > 0) {
+      message = "Còn " + remainingByOwner[owner] + " việc cũ đang chờ chuyển. Xóa bớt việc hôm nay để dành chỗ.";
+    }
     const completed = snapshot.tasks.filter(note => note.done).length;
-    const text = message || completed + "/" + snapshot.tasks.length + " việc đã xong.";
+    const text = message || announcement || completed + "/" + snapshot.tasks.length + " việc đã xong.";
     ui.status.hidden = false;
-    ui.status.classList.toggle("sr-only", !notice && canAct() && phase !== "error");
+    ui.status.classList.toggle("sr-only", !notice && !remainingByOwner[owner] && canAct() && phase !== "error");
     ui.status.dataset.error = String(Boolean(notice) || phase === "error");
     if (ui.status.textContent !== text) ui.status.textContent = text;
   }
@@ -78,14 +100,93 @@ export function createNotesDrawer(currentProfile, canAct) {
     ui.input.disabled = !canWrite;
     ui.add.disabled = !canWrite || pending;
     for (const control of ui.list.querySelectorAll("input, button")) {
-      control.disabled = !canWrite;
+      control.disabled = !canWrite || control.dataset.unavailable === "true";
       if (pending) control.setAttribute("aria-disabled", "true");
       else control.removeAttribute("aria-disabled");
     }
     renderStatus();
   }
 
-  function makeRow(note, canEdit) {
+  function showMenu(id) {
+    expandedId = id;
+    for (const row of ui.list.querySelectorAll(".notes-item")) {
+      const open = row.dataset.noteId === id;
+      const menu = row.querySelector(".notes-row-menu");
+      if (menu) menu.hidden = !open;
+      row.querySelector(".notes-handle")?.setAttribute("aria-expanded", String(open));
+    }
+  }
+
+  function moveTask(id, direction) {
+    const index = snapshot.tasks.findIndex(note => note.id === id);
+    if (index < 0 || index + direction < 0 || index + direction >= snapshot.tasks.length) return;
+    const before = direction < 0 ? snapshot.tasks[index - 1].id : snapshot.tasks[index + 2]?.id ?? null;
+    void save((profile, date) => PocketDB.notes.move(profile, date, id, before), () => {
+      announcement = "Đã đổi thứ tự ghi chú.";
+    });
+  }
+
+  function clearDrag() {
+    if (!drag) return;
+    cancelAnimationFrame(drag.scrollFrame);
+    if (drag.handle.hasPointerCapture(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+    drag = null;
+    ui.list.classList.remove("is-drop-end");
+    for (const row of ui.list.children) row.classList.remove("is-dragging", "notes-drop-before");
+  }
+
+  function updateDragTarget(y) {
+    const others = [...ui.list.querySelectorAll(".notes-item")].filter(row => row.dataset.noteId !== drag.id);
+    const before = others.find(row => {
+      const box = row.getBoundingClientRect();
+      return y < box.top + box.height / 2;
+    });
+    drag.before = before?.dataset.noteId ?? null;
+    for (const row of others) row.classList.toggle("notes-drop-before", row === before);
+    ui.list.classList.toggle("is-drop-end", !before);
+  }
+
+  function scrollWhileDragging() {
+    if (!drag?.started) return;
+    const bounds = ui.scroll.getBoundingClientRect();
+    const movement = drag.y < bounds.top + 30 ? -6 : drag.y > bounds.bottom - 30 ? 6 : 0;
+    const before = ui.scroll.scrollTop;
+    ui.scroll.scrollTop += movement;
+    updateDragTarget(drag.y);
+    drag.scrollFrame = movement && ui.scroll.scrollTop !== before ? requestAnimationFrame(scrollWhileDragging) : null;
+  }
+
+  function startDrag(event, handle, note) {
+    if (event.button !== 0 || pending || !writable()) return;
+    drag = { id: note.id, handle, pointerId: event.pointerId, token: selectionToken,
+      x: event.clientX, startY: event.clientY, y: event.clientY, started: false, before: null, scrollFrame: null };
+    handle.setPointerCapture(event.pointerId);
+  }
+
+  function trackDrag(event) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.y = event.clientY;
+    if (!drag.started && Math.hypot(event.clientX - drag.x, event.clientY - drag.startY) < 7) return;
+    if (!drag.started) showMenu(null);
+    drag.started = true;
+    drag.handle.closest(".notes-item").classList.add("is-dragging");
+    updateDragTarget(drag.y);
+    if (drag.scrollFrame === null) scrollWhileDragging();
+    event.preventDefault();
+  }
+
+  function finishDrag(event) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const { id, before, token, started } = drag;
+    clearDrag();
+    if (!started) return;
+    suppressedClickUntil = performance.now() + 350;
+    if (token === selectionToken) void save((profile, date) => PocketDB.notes.move(profile, date, id, before), () => {
+      announcement = "Đã đổi thứ tự ghi chú.";
+    });
+  }
+
+  function makeRow(note, canEdit, index) {
     const row = document.createElement("li");
     const entry = document.createElement(canEdit ? "label" : "span");
     const text = document.createElement("span");
@@ -94,6 +195,14 @@ export function createNotesDrawer(currentProfile, canAct) {
     entry.className = "notes-entry";
     text.className = "notes-text";
     text.textContent = note.text;
+    if (canEdit && snapshot.pinnedId === note.id) {
+      row.classList.add("is-pinned");
+      const pin = document.createElement("span");
+      pin.className = "notes-pin-mark";
+      pin.textContent = "◆";
+      pin.setAttribute("aria-label", "Đã ghim ưu tiên");
+      entry.append(pin);
+    }
     if (canEdit) {
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -120,24 +229,69 @@ export function createNotesDrawer(currentProfile, canAct) {
     entry.append(text);
     row.append(entry);
     if (canEdit) {
+      const tools = document.createElement("div");
+      tools.className = "notes-row-tools";
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "notes-handle";
+      handle.dataset.noteAction = "menu";
+      handle.textContent = "⋯";
+      handle.setAttribute("aria-label", "Thứ tự và ghim " + note.text);
+      handle.setAttribute("aria-expanded", String(expandedId === note.id));
+      handle.addEventListener("click", () => {
+        if (performance.now() < suppressedClickUntil) return;
+        showMenu(expandedId === note.id ? null : note.id);
+      });
+      handle.addEventListener("pointerdown", event => startDrag(event, handle, note));
+      handle.addEventListener("pointermove", trackDrag);
+      handle.addEventListener("pointerup", finishDrag);
+      handle.addEventListener("pointercancel", clearDrag);
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "notes-delete";
+      remove.dataset.noteAction = "delete";
       remove.textContent = "Xóa";
       remove.setAttribute("aria-label", "Xóa " + note.text);
-      remove.addEventListener("click", () =>
-        void save((profile, date) => PocketDB.notes.remove(profile, date, note.id)));
-      row.append(remove);
+      remove.addEventListener("click", () => void save((profile, date) => PocketDB.notes.remove(profile, date, note.id), () => {
+        if (selected === currentDay) ensureRollover(true);
+      }));
+      tools.append(handle, remove);
+      const menu = document.createElement("div");
+      menu.className = "notes-row-menu";
+      menu.id = "notes-menu-" + note.id;
+      handle.setAttribute("aria-controls", menu.id);
+      menu.hidden = expandedId !== note.id;
+      menu.setAttribute("role", "group");
+      menu.setAttribute("aria-label", "Sắp xếp và ghim ghi chú");
+      const actions = [
+        ["up", "↑ Lên", index === 0, () => moveTask(note.id, -1)],
+        ["down", "↓ Xuống", index === snapshot.tasks.length - 1, () => moveTask(note.id, 1)],
+        ["pin", snapshot.pinnedId === note.id ? "Bỏ ghim" : "Ghim ưu tiên", note.done,
+          () => void save((profile, date) => PocketDB.notes.pin(profile, date, snapshot.pinnedId === note.id ? null : note.id))],
+      ];
+      for (const [action, label, unavailable, callback] of actions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "button";
+        button.dataset.noteAction = action;
+        button.dataset.unavailable = String(unavailable);
+        button.textContent = label;
+        button.addEventListener("click", callback);
+        menu.append(button);
+      }
+      row.append(tools, menu);
     }
     return row;
   }
 
   function renderList() {
+    clearDrag();
     const active = document.activeElement;
     const activeRow = active?.closest(".notes-item");
     const focusId = activeRow && ui.list.contains(activeRow) ? activeRow.dataset.noteId : null;
+    const focusAction = active?.dataset.noteAction;
     const canEdit = editable();
-    const rows = snapshot.tasks.map(note => makeRow(note, canEdit));
+    const rows = snapshot.tasks.map((note, index) => makeRow(note, canEdit, index));
     for (let i = rows.length; i < RESERVED_ROWS; i++) {
       const blank = document.createElement("li");
       blank.className = "notes-placeholder";
@@ -148,17 +302,20 @@ export function createNotesDrawer(currentProfile, canAct) {
     renderControls();
     if (focusId) {
       const row = rows.find(item => item.dataset.noteId === focusId);
-      const control = row?.querySelector(active.tagName === "INPUT" ? "input" : "button");
+      const control = row?.querySelector(active.tagName === "INPUT" ? "input" : '[data-note-action="' + focusAction + '"]');
       (control && !control.disabled ? control : ui.scroll).focus({ preventScroll: true });
     }
   }
 
   function loadSelection(keepInput = false) {
+    clearDrag();
+    expandedId = null;
     const token = ++selectionToken;
     unsubscribe?.();
     unsubscribe = null;
     phase = "loading";
     notice = "";
+    announcement = "";
     snapshot = { tasks: [], archived: false, fromCache: false };
     if (!keepInput) ui.input.value = "";
     ui.scroll.scrollTop = 0;
@@ -194,12 +351,20 @@ export function createNotesDrawer(currentProfile, canAct) {
     loadSelection();
   }
 
-  function ensureRollover() {
-    if (!canAct() || rolledDay === currentDay || rollover) return;
+  function ensureRollover(force = false) {
+    if (!canAct() || (!force && rolledDay === currentDay)) return;
+    if (rollover) {
+      rolloverAgain ||= force;
+      return;
+    }
     const day = currentDay;
     rollover = Promise.resolve()
       .then(() => PocketDB.notes.rollover())
-      .then(() => { rolledDay = day; })
+      .then(result => {
+        remainingByOwner = result?.remainingByOwner ?? { ppa: 0, tbv: 0 };
+        rolledDay = remainingByOwner.ppa || remainingByOwner.tbv ? "" : day;
+        if (ui.drawer.open) renderStatus();
+      })
       .catch(() => {
         if (ui.drawer.open && selected === currentDay) {
           notice = "Chưa chuyển được việc dở sang hôm nay. Hãy mở lại sổ để thử.";
@@ -208,7 +373,9 @@ export function createNotesDrawer(currentProfile, canAct) {
       })
       .finally(() => {
         rollover = null;
-        if (day !== currentDay) ensureRollover();
+        const again = rolloverAgain;
+        rolloverAgain = false;
+        if (again || day !== currentDay) ensureRollover(again);
       });
   }
 
@@ -219,6 +386,7 @@ export function createNotesDrawer(currentProfile, canAct) {
   }
 
   function watchClock(now = Date.now()) {
+    focusNote.watchClock(now);
     const day = today(now);
     if (day !== currentDay) {
       const followedToday = selected === currentDay;
@@ -241,6 +409,7 @@ export function createNotesDrawer(currentProfile, canAct) {
     if (token !== selectionToken || pending || !writable()) return;
     pending = true;
     notice = "";
+    announcement = "";
     renderControls();
     try {
       const result = await action(owner, selected);
@@ -302,6 +471,7 @@ export function createNotesDrawer(currentProfile, canAct) {
   }
 
   function mount() {
+    focusNote.mount();
     ui.datePicker.min = "1970-01-02";
     ui.datePicker.max = "9999-12-30";
     if (ui.datePicker.type === "text") ui.datePicker.placeholder = "YYYY-MM-DD";
@@ -335,6 +505,13 @@ export function createNotesDrawer(currentProfile, canAct) {
     });
     ui.close.addEventListener("click", () => ui.drawer.close());
     ui.drawer.addEventListener("cancel", event => {
+      if (expandedId) {
+        const row = [...ui.list.querySelectorAll(".notes-item")].find(item => item.dataset.noteId === expandedId);
+        showMenu(null);
+        row?.querySelector(".notes-handle").focus({ preventScroll: true });
+        event.preventDefault();
+        return;
+      }
       if (!ui.dateFallback.hidden && !ui.dateFallback.classList.contains("is-native")) {
         event.preventDefault();
         hideDatePicker(true);
@@ -342,15 +519,21 @@ export function createNotesDrawer(currentProfile, canAct) {
     });
     ui.drawer.addEventListener("close", () => {
       if (ui.drawer.open) return;
+      clearDrag();
+      expandedId = null;
       selectionToken++;
       unsubscribe?.();
       unsubscribe = null;
       hideDatePicker();
     });
+    ui.drawer.addEventListener("click", event => {
+      if (!event.target.closest(".notes-handle, .notes-row-menu")) showMenu(null);
+    });
   }
 
   function open() {
     if (ui.drawer.open) return;
+    focusNote.retry();
     currentDay = today();
     owner = currentProfile() === "tbv" ? "tbv" : "ppa";
     selected = currentDay;
@@ -358,21 +541,23 @@ export function createNotesDrawer(currentProfile, canAct) {
     ui.drawer.showModal();
     loadSelection();
     ui.centerDate.focus({ preventScroll: true });
-    ensureRollover();
+    ensureRollover(true);
   }
 
   function connectionChanged() {
+    focusNote.connectionChanged();
     const next = canAct();
     if (connected === next) return;
     connected = next;
     if (connected) {
       watchClock();
-      ensureRollover();
+      ensureRollover(true);
     }
     if (!ui.drawer.open) return;
     if (connected && phase === "error") loadSelection(true);
     else renderControls();
   }
 
-  return { mount, open, watchClock, connectionChanged };
+  return { mount, open, watchClock, connectionChanged,
+    profileChanged: () => focusNote.profileChanged(), todayCounts: () => focusNote.todayCounts() };
 }

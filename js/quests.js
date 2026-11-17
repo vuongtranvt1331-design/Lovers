@@ -1,5 +1,5 @@
-import { DAILY_QUESTS } from "./catalog.js?v=activity-plan-nine";
-import { FocusState } from "./state.js?v=activity-plan-nine";
+import { DAILY_QUESTS } from "./catalog.js?v=daily-priority";
+import { FocusState } from "./state.js?v=daily-priority";
 import { AudioEngine } from "./audio.js";
 
 const questRoot = new URL("../assets/quests/", import.meta.url);
@@ -15,6 +15,14 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
   let questFeedbackPlaying = false;
   const feedbackHome = ui.questFeedback.parentElement;
 
+  function waterLabel(element, prefix, suffix = "") {
+    const icon = document.createElement("span");
+    icon.className = "drop";
+    icon.setAttribute("aria-hidden", "true");
+    element.classList.add("with-water-icon");
+    element.replaceChildren(document.createTextNode(prefix), icon, document.createTextNode(suffix));
+  }
+
   function questArtKey(quest, user) {
     return (quest.pair ? "" : user + "_") + "quest_" + quest.id;
   }
@@ -28,17 +36,19 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
 
   function renderQuests() {
     const { plant, messages } = FocusState.data;
-    const claims = plant.dailyQuests[plant.date] || {};
+    const currentDay = FocusState.today();
+    const current = plant.date === currentDay;
+    const claims = current ? plant.dailyQuests[currentDay] || {} : {};
     const user = currentProfile();
     let count = 0;
     for (const { quest, image, button } of questCards) {
       const claim = quest.id + "_" + user;
       const done = claims[quest.pair ? quest.id + "_pair" : claim] === true || claims[claim] === true;
       const request = quest.pair && messages.find(message => message.kind === "quest_request"
-        && message.questId === quest.id && message.questDate === plant.date && message.questStatus === "pending");
+        && message.questId === quest.id && message.questDate === currentDay && message.questStatus === "pending");
       const incoming = request?.to === user;
       count += Number(done);
-      button.disabled = !canAct() || done || questPending.has(claim) || Boolean(request && !incoming);
+      button.disabled = !canAct() || !current || done || questPending.has(claim) || Boolean(request && !incoming);
       button.classList.toggle("is-complete", done);
       button.textContent = done ? "✓ Đã xong" : incoming ? "Xác nhận"
         : request ? "Chờ xác nhận" : quest.pair ? "Gửi yêu cầu" : "Làm rồi";
@@ -47,7 +57,7 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
     }
     ui.questCount.textContent = count + "/" + questCards.length;
     ui.questProfile.textContent = "Nhiệm vụ của " + user.toUpperCase()
-      + (canAct() ? " · nhiệm vụ đôi cần cả hai xác nhận." : " · cần kết nối để nhận thưởng.");
+      + (!current ? " · đang chờ đồng bộ ngày mới." : canAct() ? " · nhiệm vụ đôi cần cả hai xác nhận." : " · cần kết nối để nhận thưởng.");
   }
 
   async function playQuestFeedback() {
@@ -56,7 +66,7 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
     const { quest, user } = questFeedbackQueue.shift();
     useQuestImage(ui.questFeedbackImage, questArtKey(quest, user));
     try { await ui.questFeedbackImage.decode(); } catch {}
-    ui.questFeedbackText.textContent = "+" + quest.reward + " 💧 cho " + user.toUpperCase();
+    waterLabel(ui.questFeedbackText, "+" + quest.reward, " cho " + user.toUpperCase());
     if (ui.questDrawer.open) ui.questDrawer.append(ui.questFeedback);
     ui.questFeedback.hidden = false;
     ui.questFeedback.classList.add("is-playing");
@@ -115,7 +125,7 @@ export function createQuestDrawer(currentProfile, commit, canAct, showCoupleQues
       title.textContent = quest.icon + " " + quest.title;
       const reward = document.createElement("span");
       reward.className = "quest-reward";
-      reward.textContent = "+" + quest.reward + " 💧" + (quest.pair ? " / người" : "");
+      waterLabel(reward, "+" + quest.reward, quest.pair ? " / người" : "");
       const button = document.createElement("button");
       button.type = "button";
       button.className = "button quest-claim";

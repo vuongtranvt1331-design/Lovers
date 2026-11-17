@@ -215,14 +215,17 @@ async function runRoomTransaction({ fs, db, refs }, apply) {
   }
 }
 
-async function mutate(transform, _needsLegacyLogs, options = {}) {
+async function mutate(transform, needsLegacyLogs, options = {}) {
   const client = await context();
   const { fs, refs } = client;
   requireOnline();
   const actor = options.actor ?? 'system';
   if (actor !== 'system' && !roles.includes(actor)) throw dbError('invalid-argument', 'Hồ sơ không hợp lệ.');
+  let legacyHistory;
   try {
-    return await runRoomTransaction(client, async (transaction, current) => {
+    for (let migrationAttempt = 0; migrationAttempt < 5; migrationAttempt++) {
+      try {
+        return await runRoomTransaction(client, async (transaction, current) => {
       let raw = rawFrom(current);
       const needsUsers = !raw;
       if (needsUsers) {
@@ -236,7 +239,13 @@ async function mutate(transform, _needsLegacyLogs, options = {}) {
           messages: current?.messages ?? [],
         };
       }
-      const change = transform(raw, []);
+      const needsHistory = typeof needsLegacyLogs === 'function' && needsLegacyLogs(raw);
+      const legacyDate = raw.plant?.date ?? today(options.now ?? Date.now());
+      if (needsHistory && (!legacyHistory || legacyHistory.revision !== (current?.revision ?? 0)
+        || legacyHistory.date !== legacyDate)) {
+        throw Object.assign(dbError('legacy-history-required', 'Đang đồng bộ lịch sử cũ.'), { date: legacyDate });
+      }
+      const change = transform(raw, needsHistory ? legacyHistory.logs : []);
       const { draft, logs } = change;
       if (!needsUsers && !logs.length && equal(draft.users, raw.users)
         && equal(draft.plant, raw.plant) && equal(draft.messages, raw.messages)) {
@@ -246,7 +255,8 @@ async function mutate(transform, _needsLegacyLogs, options = {}) {
       const historyIndex = { ...current?.historyIndex };
       const segments = logs.flatMap(entry => splitLog(entry, revision));
       for (const segment of segments) {
-        historyIndex[segment.dateStr] = (historyIndex[segment.dateStr] ?? 0) + 1;
+        const count = historyIndex[segment.dateStr];
+        historyIndex[segment.dateStr] = (Number.isSafeInteger(count) && count >= 0 && count < Number.MAX_SAFE_INTEGER ? count : 0) + 1;
         transaction.set(fs.doc(refs.logs, segment.id), segment);
       }
       for (const role of roles) {
@@ -289,7 +299,13 @@ async function mutate(transform, _needsLegacyLogs, options = {}) {
         updatedAt: fs.serverTimestamp(),
       });
       return { ...change, revision };
-    });
+        });
+      } catch (error) {
+        if (error.code !== 'legacy-history-required') throw error;
+        legacyHistory = await readHistorySnapshot(client, error.date, true);
+      }
+    }
+    throw dbError('history-retry', 'Dữ liệu vừa thay đổi. Hãy thử lại.');
   } catch (error) {
     const offline = isNetworkError(error);
     if (offline) serverReady = false;
@@ -299,37 +315,65 @@ async function mutate(transform, _needsLegacyLogs, options = {}) {
   }
 }
 
-async function historyDay(dateStr) {
-  const { fs, refs } = await context();
-  const dayQuery = fs.query(refs.logs, fs.where('dateStr', '==', dateStr));
-  async function read(useServer) {
-    const [snapshot, logs] = await Promise.all([
-      (useServer ? fs.getDocFromServer : fs.getDocFromCache)(refs.room),
-      (useServer ? fs.getDocsFromServer : fs.getDocsFromCache)(dayQuery),
-    ]);
-    const room = snapshot.data();
-    const users = room?.users ?? null;
-    const entries = logs.docs.map(item => item.data());
-    // Activity rows are immutable. This count and revision fence makes the
-    // indexed query and the users snapshot one consistent committed view.
-    if (entries.length !== (room?.historyIndex?.[dateStr] ?? 0)
-      || entries.some(entry => entry.roomRevision > room?.revision)) return null;
-    return { logs: entries, users };
+// A server-confirmed query is complete independently of the advisory counter.
+// Keep its signature so a poisoned old counter cannot block an offline reread.
+const verifiedHistory = new Map();
+function historyCertificate(date, value) {
+  let key;
+  try { key = 'pocket-space-history-v2:' + projectForURL().config.projectId + ':' + date; }
+  catch { /* Storage is optional in private or embedded browser contexts. */ }
+  if (value) {
+    verifiedHistory.set(date, value);
+    try { if (key) localStorage.setItem(key, JSON.stringify(value)); } catch { /* Keep the in-memory certificate. */ }
+    return value;
   }
-  if (serverReady) {
+  if (!verifiedHistory.has(date)) {
     try {
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const snapshot = await read(true);
-        if (snapshot) return snapshot;
-      }
-      throw dbError('history-retry', 'Lịch sử vừa thay đổi. Hãy thử lại.');
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-    }
+      const saved = key && JSON.parse(localStorage.getItem(key));
+      if (Number.isSafeInteger(saved?.revision) && typeof saved.signature === 'string') verifiedHistory.set(date, saved);
+    } catch { /* An absent certificate requires an online query. */ }
   }
-  const cached = await read(false);
-  if (cached) return cached;
-  throw dbError('history-not-cached', 'Ngày này chưa tải đủ dữ liệu để xem ngoại tuyến.');
+  return verifiedHistory.get(date);
+}
+function historyEntry(entry, date, revision) {
+  const start = dateStart(date), end = dateStart(nextDay(date));
+  return entry && entry.dateStr === date && roles.includes(entry.user)
+    && typeof entry.id === 'string' && typeof entry.activity === 'string'
+    && Number.isSafeInteger(entry.roomRevision) && entry.roomRevision > 0 && entry.roomRevision <= revision
+    && Number.isSafeInteger(entry.startTimestamp) && Number.isSafeInteger(entry.endTimestamp)
+    && entry.startTimestamp >= start && entry.startTimestamp < end
+    && entry.endTimestamp >= entry.startTimestamp && entry.endTimestamp <= end;
+}
+async function readHistorySnapshot({ fs, refs }, date, useServer) {
+  if (dateStart(date) === null) throw dbError('invalid-argument', 'Ngày lịch sử không hợp lệ.');
+  const dayQuery = fs.query(refs.logs, fs.where('dateStr', '==', date));
+  const getRoom = useServer ? fs.getDocFromServer : fs.getDocFromCache;
+  const getLogs = useServer ? fs.getDocsFromServer : fs.getDocsFromCache;
+  for (let attempt = 0; attempt < (useServer ? 4 : 1); attempt++) {
+    const before = (await getRoom(refs.room)).data();
+    const query = await getLogs(dayQuery);
+    const room = (await getRoom(refs.room)).data();
+    const revision = room?.revision ?? 0;
+    if ((before?.revision ?? 0) !== revision) continue;
+    const rows = query.docs.map(item => item.data());
+    const signature = JSON.stringify(query.docs.map(item => item.id ?? item.data().id).sort());
+    const indexValue = room?.historyIndex?.[date] ?? 0;
+    const certificate = historyCertificate(date);
+    if (!useServer && !(certificate?.revision <= revision && certificate.signature === signature
+      && Object.hasOwn(certificate, 'indexValue') && equal(certificate.indexValue, indexValue))) continue;
+    if (useServer) historyCertificate(date, { revision, signature, indexValue });
+    return { date, revision, logs: rows.filter(entry => historyEntry(entry, date, revision)), users: room?.users ?? null };
+  }
+  throw dbError(useServer ? 'history-retry' : 'history-not-cached', useServer
+    ? 'Lịch sử vừa thay đổi. Hãy thử lại.' : 'Ngày này chưa tải đủ dữ liệu để xem ngoại tuyến.');
+}
+async function historyDay(date) {
+  const client = await context();
+  if (serverReady) {
+    try { return await readHistorySnapshot(client, date, true); }
+    catch (error) { if (!isNetworkError(error)) throw error; }
+  }
+  return readHistorySnapshot(client, date, false);
 }
 
 const NOTE_LIMIT = 300;
@@ -344,18 +388,37 @@ function noteDayId(owner, date) {
   return owner + '_' + date;
 }
 
-function openNoteDay(owner, date, previous) {
-  return { owner, date, tasks: { ...previous?.tasks }, doneIds: [...(previous?.doneIds ?? [])], pendingDay: date };
+function noteOrder(raw) {
+  const tasks = raw?.tasks ?? {};
+  const seen = new Set();
+  const preferred = Array.isArray(raw?.taskOrder) ? raw.taskOrder : [];
+  const fallback = Object.keys(tasks).sort((a, b) => (Number(tasks[a]?.createdAt) || 0)
+    - (Number(tasks[b]?.createdAt) || 0) || a.localeCompare(b));
+  return [...preferred, ...fallback].filter(id => typeof id === 'string' && Object.hasOwn(tasks, id)
+    && !seen.has(id) && seen.add(id));
 }
-
+function openNoteDay(owner, date, previous) {
+  const tasks = { ...previous?.tasks };
+  const doneIds = [...new Set(Array.isArray(previous?.doneIds) ? previous.doneIds : [])]
+    .filter(id => Object.hasOwn(tasks, id));
+  const pinnedId = previous?.pinnedId;
+  return { owner, date, tasks, doneIds, pendingDay: date, notesVersion: 2,
+    taskOrder: noteOrder(previous),
+    pinnedId: typeof pinnedId === 'string' && Object.hasOwn(tasks, pinnedId) && !doneIds.includes(pinnedId) ? pinnedId : null };
+}
 function noteSnapshot(owner, date, snapshot) {
   const raw = snapshot.data();
   const doneIds = new Set(raw?.doneIds ?? []);
-  const tasks = Object.entries(raw?.tasks ?? {}).filter(([, item]) => typeof item?.text === 'string')
-    .map(([id, { text, createdAt, carriedFromDate }]) => ({ id, text, done: doneIds.has(id), createdAt,
-      ...(carriedFromDate ? { carriedFromDate } : {}) }))
-    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id));
-  return { owner, date, tasks, archived: Boolean(raw?.archivedTo) || date < today(), fromCache: snapshot.metadata.fromCache };
+  const tasks = noteOrder(raw).map(id => {
+    const item = raw.tasks[id];
+    // Malformed legacy values remain visible and deletable instead of silently
+    // occupying capacity while presenting an empty notebook.
+    const text = typeof item?.text === 'string' ? item.text : 'Mục ghi chú cũ không đọc được';
+    return { id, text, done: doneIds.has(id), createdAt: item?.createdAt ?? 0,
+      ...(item?.carriedFromDate ? { carriedFromDate: item.carriedFromDate } : {}) };
+  });
+  const pinnedId = tasks.some(task => task.id === raw?.pinnedId && !task.done) ? raw.pinnedId : null;
+  return { owner, date, tasks, pinnedId, archived: Boolean(raw?.archivedTo) || date < today(), fromCache: snapshot.metadata.fromCache };
 }
 
 function subscribeNotes(owner, date, onChange, onError = () => {}) {
@@ -373,7 +436,9 @@ function subscribeNotes(owner, date, onChange, onError = () => {}) {
 }
 
 function validateNoteTaskId(id) {
-  if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) {
+  // IDs from earlier public day maps may contain punctuation. These are map
+  // keys, never document paths: retaining them lets users remove legacy rows.
+  if (typeof id !== 'string' || !id.length || id.length > 1500) {
     throw dbError('invalid-argument', 'Mục ghi chú không hợp lệ.');
   }
 }
@@ -414,6 +479,7 @@ async function addNote(owner, date, text) {
   const createdAt = Date.now();
   return mutateNoteDay(owner, date, draft => {
     draft.tasks[id] = { text: body, createdAt };
+    draft.taskOrder.push(id);
     return id;
   });
 }
@@ -424,6 +490,7 @@ async function setNoteDone(owner, date, id, done) {
   return mutateNoteDay(owner, date, draft => {
     if (!Object.hasOwn(draft.tasks, id) || draft.doneIds.includes(id) === done) return false;
     draft.doneIds = done ? [...draft.doneIds, id] : draft.doneIds.filter(value => value !== id);
+    if (done && draft.pinnedId === id) draft.pinnedId = null;
     return true;
   });
 }
@@ -434,69 +501,95 @@ async function removeNote(owner, date, id) {
     if (!Object.hasOwn(draft.tasks, id)) return false;
     delete draft.tasks[id];
     draft.doneIds = draft.doneIds.filter(value => value !== id);
+    draft.taskOrder = draft.taskOrder.filter(value => value !== id);
+    if (draft.pinnedId === id) draft.pinnedId = null;
     return true;
   });
 }
 
-async function archiveNotePage({ fs, db, refs }, page, date) {
-  return fs.runTransaction(db, async transaction => {
-    const sources = (await Promise.all(page.docs.map(item => transaction.get(item.ref))))
-      .flatMap(item => {
-        const raw = item.data();
-        if (!raw?.pendingDay || raw.pendingDay >= date) return [];
-        if (raw.pendingDay !== raw.date || noteDayId(raw.owner, raw.date) !== item.id) {
-          throw dbError('data-loss', 'Không thể đọc bản ghi chú cũ.');
-        }
-        const done = new Set(raw.doneIds);
-        const incomplete = Object.entries(raw.tasks).filter(([id]) => !done.has(id));
-        return [{ ref: item.ref, raw, incomplete }];
-      });
-    const owners = new Set(sources.filter(item => item.incomplete.length).map(item => item.raw.owner));
-    const destinations = new Map(await Promise.all([...owners].map(async owner => {
-      const ref = fs.doc(refs.noteDays, noteDayId(owner, date));
-      const previous = (await transaction.get(ref)).data();
-      return [owner, { ref, draft: openNoteDay(owner, date, previous), changed: false }];
-    })));
-    for (const { raw, incomplete } of sources) {
-      const destination = destinations.get(raw.owner);
-      for (const [id, task] of incomplete) {
-        if (Object.hasOwn(destination.draft.tasks, id)) continue;
-        destination.draft.tasks[id] = { ...task, carriedFromDate: raw.date };
-        destination.changed = true;
-      }
-    }
-    for (const { ref, draft, changed } of destinations.values()) {
-      if (!changed) continue;
-      checkNoteCapacity(draft.tasks);
-      transaction.set(ref, { ...draft, updatedAt: fs.serverTimestamp() });
-    }
-    for (const { ref, raw } of sources) {
-      const { owner, tasks, doneIds } = raw;
-      transaction.set(ref, { owner, date: raw.date, tasks, doneIds, archivedTo: date, updatedAt: fs.serverTimestamp() });
-    }
-    return sources.length;
+async function moveNote(owner, date, id, beforeId = null) {
+  validateNoteTaskId(id);
+  if (beforeId !== null) validateNoteTaskId(beforeId);
+  return mutateNoteDay(owner, date, draft => {
+    if (id === beforeId || !Object.hasOwn(draft.tasks, id)
+      || (beforeId !== null && !Object.hasOwn(draft.tasks, beforeId))) return false;
+    const order = draft.taskOrder.filter(value => value !== id);
+    order.splice(beforeId === null ? order.length : order.indexOf(beforeId), 0, id);
+    if (equal(order, draft.taskOrder)) return false;
+    draft.taskOrder = order;
+    return true;
   });
 }
-
+async function pinNote(owner, date, id) {
+  if (id !== null) validateNoteTaskId(id);
+  return mutateNoteDay(owner, date, draft => {
+    if (id === draft.pinnedId || (id !== null
+      && (!Object.hasOwn(draft.tasks, id) || draft.doneIds.includes(id)))) return false;
+    draft.pinnedId = id;
+    return true;
+  });
+}
+async function archiveNoteSource({ fs, db, refs }, item, date) {
+  return fs.runTransaction(db, async transaction => {
+    const raw = (await transaction.get(item.ref)).data();
+    if (!raw?.pendingDay || raw.pendingDay >= date) return { archived: 0, owner: raw?.owner, remaining: [] };
+    if (raw.pendingDay !== raw.date || noteDayId(raw.owner, raw.date) !== item.id || raw.archivedTo) {
+      throw dbError('data-loss', 'Không thể đọc bản ghi chú cũ.');
+    }
+    const done = new Set(raw.doneIds);
+    const carried = new Set(raw.carriedIds ?? []);
+    const pending = noteOrder(raw).filter(id => !done.has(id) && !carried.has(id));
+    const ref = fs.doc(refs.noteDays, noteDayId(raw.owner, date));
+    const previous = pending.length ? (await transaction.get(ref)).data() : null;
+    const draft = openNoteDay(raw.owner, date, previous);
+    let free = NOTE_LIMIT - Object.keys(draft.tasks).length;
+    let changed = false;
+    for (const id of pending) {
+      if (Object.hasOwn(draft.tasks, id)) { carried.add(id); continue; }
+      if (free <= 0) continue;
+      draft.tasks[id] = { ...raw.tasks[id], carriedFromDate: raw.tasks[id]?.carriedFromDate ?? raw.date };
+      draft.taskOrder.push(id);
+      carried.add(id);
+      free--;
+      changed = true;
+    }
+    if (!draft.pinnedId && pending.includes(raw.pinnedId) && carried.has(raw.pinnedId)
+      && Object.hasOwn(draft.tasks, raw.pinnedId) && !draft.doneIds.includes(raw.pinnedId)) {
+      draft.pinnedId = raw.pinnedId;
+      changed = true;
+    }
+    const remaining = pending.filter(id => !carried.has(id));
+    if (changed) transaction.set(ref, { ...draft, updatedAt: fs.serverTimestamp() });
+    const source = { ...raw, notesVersion: 2, taskOrder: noteOrder(raw), pinnedId: raw.pinnedId ?? null,
+      carriedIds: [...carried], carriedTo: date, updatedAt: fs.serverTimestamp() };
+    if (!remaining.length) {
+      delete source.pendingDay;
+      source.archivedTo = date;
+    }
+    if (!remaining.length || carried.size !== (raw.carriedIds?.length ?? 0)) transaction.set(item.ref, source);
+    return { archived: remaining.length ? 0 : 1, owner: raw.owner, remaining };
+  });
+}
 async function catchUpNotes() {
   const client = await context();
   const { fs, refs } = client;
+  let date = today(), cursor;
+  const remaining = { ppa: new Set(), tbv: new Set() };
   let archived = 0;
   for (;;) {
     requireOnline();
-    const date = today();
-    const query = fs.query(refs.noteDays, fs.where('pendingDay', '<', date), fs.limit(NOTE_ROLLOVER_PAGE));
-    const page = await fs.getDocsFromServer(query);
-    if (page.empty && date === today()) return archived;
-    if (date !== today()) continue;
-    try {
-      archived += await archiveNotePage(client, page, date);
-    } catch (error) {
-      if (date !== today()) continue;
-      if (!['permission-denied', 'already-exists'].includes(error.code)) throw error;
-      const latest = new Set((await fs.getDocsFromServer(query)).docs.map(item => item.id));
-      if (page.docs.every(item => latest.has(item.id))) throw error;
+    if (date !== today()) { date = today(); cursor = undefined; remaining.ppa.clear(); remaining.tbv.clear(); }
+    const constraints = [fs.where('pendingDay', '<', date), fs.orderBy('pendingDay'), fs.limit(NOTE_ROLLOVER_PAGE)];
+    if (cursor) constraints.push(fs.startAfter(cursor));
+    const page = await fs.getDocsFromServer(fs.query(refs.noteDays, ...constraints));
+    if (page.empty) return { archived, remainingByOwner: Object.fromEntries(roles.map(owner => [owner, remaining[owner].size])) };
+    for (const item of page.docs) {
+      const result = await archiveNoteSource(client, item, date);
+      archived += result.archived;
+      for (const id of result.remaining) remaining[result.owner].add(id);
     }
+    // Advance past capacity-blocked sources, allowing the other owner to drain.
+    cursor = page.docs.at(-1);
   }
 }
 
@@ -518,5 +611,5 @@ export const PocketDB = {
   },
   mutate,
   historyDay,
-  notes: { subscribe: subscribeNotes, add: addNote, setDone: setNoteDone, remove: removeNote, rollover: rolloverNotes },
+  notes: { subscribe: subscribeNotes, add: addNote, setDone: setNoteDone, remove: removeNote, move: moveNote, pin: pinNote, rollover: rolloverNotes },
 };

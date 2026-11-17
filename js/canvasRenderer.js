@@ -1,4 +1,4 @@
-import { spriteURL } from "./catalog.js?v=activity-plan-nine";
+import { spriteURL } from "./catalog.js?v=daily-priority";
 
 export const CanvasRenderer = (() => {
   const BACKGROUND = '#f4f8f3';

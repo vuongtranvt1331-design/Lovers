@@ -16,26 +16,35 @@ service cloud.firestore {
           && data.lastActivityTimestamp <= request.time.toMillis() + 120000))
         && data.waterDropsToday is int && data.waterDropsToday >= 0
         && data.waterToday == data.waterDropsToday && data.questsDone is list
-        && data.lastActive == request.time && validSchedule(data)
+        && data.lastActive == request.time && validSchedule(data, role)
         && ((data.currentActivity == 'home_idle' && data.startTime == null)
           || (data.currentActivity != 'home_idle' && data.startTime is int
             && data.startTime <= request.time.toMillis() + 120000));
     }
-    function validScheduleSlot(entry, anchor, slot) {
+    function validActivity(role, activity) {
+      return activity in ['home_idle', 'home_sleeping', 'home_morning', 'home_desk_work', 'home_studying',
+        'home_cooking', 'home_eating', 'home_chores', 'home_bed_rot', 'home_gaming', 'home_nap',
+        'work_locked_in', 'work_teaching', 'work_meeting', 'work_bored_staring', 'work_fake_working',
+        'work_coffee_escape', 'work_counting_down', 'out_walking', 'out_running', 'out_gym', 'out_errand',
+        'out_going_to_school', 'out_heading_home', 'social_cafe', 'social_dining', 'travel_driving_long', 'travel_hometown']
+        || (role == 'ppa' && activity in ['home_play_with_cofi', 'travel_thailand'])
+        || (role == 'tbv' && activity in ['home_french_studying', 'home_football']);
+    }
+    function validScheduleSlot(entry, anchor, slot, role) {
       return entry is map && entry.keys().hasOnly(['slot', 'activity', 'startsAt'])
-        && entry.slot == slot && entry.activity is string
+        && entry.slot == slot && validActivity(role, entry.activity)
         && entry.startsAt is int && entry.startsAt == anchor + slot * 3600000;
     }
-    function validSchedule(data) {
+    function validSchedule(data, role) {
       let entries = data.get('activitySchedule', []);
       let anchor = data.get('scheduleAnchorAt', null);
       return data.get('scheduleVersion', 0) is int && data.get('scheduleVersion', 0) >= 0
         && entries is list && entries.size() <= 2
         && ((entries.size() == 0 && anchor == null) || (entries.size() > 0 && anchor is int
-          && anchor <= request.time.toMillis() + 120000
-          && (validScheduleSlot(entries[0], anchor, 1) || validScheduleSlot(entries[0], anchor, 2))
-          && (entries.size() == 1 || (validScheduleSlot(entries[0], anchor, 1)
-            && validScheduleSlot(entries[1], anchor, 2)))));
+          && anchor >= 0 && anchor <= request.time.toMillis() + 120000
+          && (validScheduleSlot(entries[0], anchor, 1, role) || validScheduleSlot(entries[0], anchor, 2, role))
+          && (entries.size() == 1 || (validScheduleSlot(entries[0], anchor, 1, role)
+            && validScheduleSlot(entries[1], anchor, 2, role)))));
     }
     function automatedSlot(before, after, entry, count, remaining) {
       return entry.startsAt <= request.time.toMillis() + 120000
@@ -62,6 +71,35 @@ service cloud.firestore {
         && after.lastActivityTimestamp == before.lastActivityTimestamp && after.plannedEndTime == null
         && after.activitySchedule == [] && after.scheduleAnchorAt == null && after.scheduleVersion == 0;
     }
+    function canonicalEntry(entry, anchor, slot, role) {
+      return anchor is int && anchor >= 0 && anchor <= 253402128000000
+        && entry is map && entry.get('slot', 0) == slot
+        && validActivity(role, entry.get('activity', ''))
+        && entry.get('startsAt', null) == anchor + slot * 3600000
+        ? [{'slot': slot, 'activity': entry.activity, 'startsAt': entry.startsAt}] : [];
+    }
+    function canonicalSlot(entries, anchor, slot, role) {
+      let first = entries.size() > 0 ? canonicalEntry(entries[0], anchor, slot, role) : [];
+      let second = entries.size() > 1 ? canonicalEntry(entries[1], anchor, slot, role) : [];
+      return second.size() > 0 ? second : first;
+    }
+    function repairedSchedule(before, role) {
+      let entries = before.get('activitySchedule', []) is list ? before.get('activitySchedule', []) : [];
+      let anchor = before.get('scheduleAnchorAt', null);
+      return canonicalSlot(entries, anchor, 1, role).concat(canonicalSlot(entries, anchor, 2, role));
+    }
+    function scheduleRecovery(before, after, role) {
+      let entries = repairedSchedule(before, role);
+      let anchor = entries.size() > 0 ? before.scheduleAnchorAt : null;
+      return (before.get('activitySchedule', []) != entries || before.get('scheduleAnchorAt', null) != anchor)
+        && after.activitySchedule == entries && after.scheduleAnchorAt == anchor
+        && after.scheduleVersion == before.get('scheduleVersion', 0) + 1
+        && after.currentActivity == before.currentActivity && after.startTime == before.startTime
+        && after.sessionVersion == before.sessionVersion && after.plannedEndTime == before.plannedEndTime
+        && after.lastActivityTimestamp == before.lastActivityTimestamp
+        && after.get('sessionId', null) == before.get('sessionId', null)
+        && after.get('explicitSession', false) == before.get('explicitSession', false);
+    }
     function mirrored(data, role) {
       let room = roomAfter();
       return sameRoomWrite(room.revision)
@@ -76,7 +114,7 @@ service cloud.firestore {
                             'explicitSession', 'sessionVersion', 'lastActivityTimestamp', 'sessionId',
                             'activitySchedule', 'scheduleAnchorAt', 'scheduleVersion'])
           || roomAfter().actor == role
-          || scheduleMigration(before, after) || validAutomation(before, after));
+          || scheduleMigration(before, after) || scheduleRecovery(before, after, role) || validAutomation(before, after));
     }
     function historyPreserved(before, after, liveDate) {
       let changes = after.diff(before);
@@ -102,7 +140,7 @@ service cloud.firestore {
     function validRoom(data, canRetainLegacyTarget) {
       return data.actor in ['ppa', 'tbv', 'system'] && data.revision is int && data.revision > 0
         && data.clientEvaluatedAt is timestamp && data.clientEvaluatedAt <= request.time + duration.value(2, 'm')
-        && data.updatedAt == request.time && data.plant is map
+        && data.updatedAt == request.time && data.plant is map && data.get('historyIndex', {}) is map
         && data.currentStage is int && data.currentStage >= 1 && data.currentStage <= 9
         && data.streakDays is int && data.streakDays >= 0
         && data.streakDays <= (data.plant.get('balanceVersion', 0) >= 2 ? 10 : 21)
@@ -120,6 +158,7 @@ service cloud.firestore {
         && request.resource.data.revision == resource.data.revision + 1
         && request.resource.data.plant.get('wateringVersion', 0) >= resource.data.plant.get('wateringVersion', 0)
         && request.resource.data.plant.get('rewardProgressVersion', 0) >= resource.data.plant.get('rewardProgressVersion', 0)
+        && request.resource.data.plant.get('rewardReceiptVersion', 0) >= resource.data.plant.get('rewardReceiptVersion', 0)
         && request.resource.data.plant.get('balanceVersion', 0) >= resource.data.plant.get('balanceVersion', 0)
         && request.resource.data.plant.get('activityScheduleVersion', 0) >= resource.data.plant.get('activityScheduleVersion', 0)
         && historyPreserved(resource.data.plant.waterHistoryByDate,
@@ -156,61 +195,105 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && sameRoomWrite(request.resource.data.roomRevision);
     }
+    function validDate(value) {
+      return value is string && value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}');
+    }
+    function dayStart(value) {
+      let parts = value.split('-');
+      return timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) - duration.value(7, 'h');
+    }
+    function actualDate(value) {
+      let parts = value.split('-');
+      let stamp = timestamp.date(int(parts[0]), int(parts[1]), int(parts[2]));
+      return validDate(value) && int(parts[0]) >= 1970
+        && stamp.year() == int(parts[0]) && stamp.month() == int(parts[1]) && stamp.day() == int(parts[2]);
+    }
     match /pocket_space/activity_history/logs/{log} {
+      function priorCount(data) {
+        let index = data.get('historyIndex', {});
+        let count = index is map ? index.get(request.resource.data.dateStr, 0) : 0;
+        return count is int && count >= 0 && count < 9007199254740991 ? count : 0;
+      }
+      function counted(data) {
+        let before = exists(roomPath()) ? priorCount(get(roomPath()).data) : 0;
+        return roomAfter().get('historyIndex', {}).get(data.dateStr, 0) is int
+          && roomAfter().historyIndex[data.dateStr] > before;
+      }
       allow read: if true;
       allow create: if request.resource.data.id == log
-        && request.resource.data.user in ['ppa', 'tbv']
-        && request.resource.data.dateStr.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.user in ['ppa', 'tbv'] && request.resource.data.activity is string
+        && validDate(request.resource.data.dateStr) && actualDate(request.resource.data.dateStr)
         && request.resource.data.startTimestamp is int && request.resource.data.endTimestamp is int
+        && request.resource.data.startTimestamp >= dayStart(request.resource.data.dateStr).toMillis()
+        && request.resource.data.startTimestamp < (dayStart(request.resource.data.dateStr) + duration.value(1, 'd')).toMillis()
         && request.resource.data.endTimestamp >= request.resource.data.startTimestamp
+        && request.resource.data.endTimestamp <= (dayStart(request.resource.data.dateStr) + duration.value(1, 'd')).toMillis()
         && request.resource.data.endTimestamp <= request.time.toMillis() + 120000
-        && sameRoomWrite(request.resource.data.roomRevision);
+        && sameRoomWrite(request.resource.data.roomRevision) && counted(request.resource.data);
     }
     match /pocket_space/notes_state/days/{noteDay} {
-      function validDate(value) {
-        return value is string && value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}');
-      }
-      function dayStart(value) {
-        let parts = value.split('-');
-        return timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])) - duration.value(7, 'h');
+      function ordered(data) {
+        return data.taskOrder is list && data.taskOrder.size() == data.tasks.size()
+          && data.taskOrder.toSet() == data.tasks.keys().toSet()
+          && (data.pinnedId == null || (data.pinnedId is string && data.pinnedId in data.tasks
+            && !(data.pinnedId in data.doneIds)));
       }
       function validDay(data) {
-        return data.owner in ['ppa', 'tbv'] && validDate(data.date)
+        return data.owner in ['ppa', 'tbv'] && validDate(data.date) && actualDate(data.date)
           && noteDay == data.owner + '_' + data.date
           && data.tasks is map && data.tasks.size() <= 300
           && data.doneIds is list && data.doneIds.size() <= data.tasks.size()
           && data.doneIds.toSet().size() == data.doneIds.size()
           && data.tasks.keys().toSet().hasAll(data.doneIds)
+          && data.get('notesVersion', 0) is int && data.get('notesVersion', 0) in [0, 2]
+          && (data.get('notesVersion', 0) < 2 || ordered(data))
           && data.updatedAt == request.time;
       }
       function canEdit(data) {
-        return data.keys().hasOnly(['owner', 'date', 'tasks', 'doneIds', 'pendingDay', 'updatedAt'])
+        return data.keys().hasOnly(['owner', 'date', 'tasks', 'doneIds', 'pendingDay', 'updatedAt',
+            'notesVersion', 'taskOrder', 'pinnedId'])
           && data.pendingDay == data.date
           && request.time < dayStart(data.date) + duration.value(1, 'd');
       }
-      function carriedIntoToday(before, destination) {
-        let unfinished = before.tasks.keys().toSet().difference(before.doneIds.toSet());
-        let destId = before.owner + '_' + destination;
-        return unfinished.size() == 0
-          || getAfter(/databases/$(database)/documents/pocket_space/notes_state/days/$(destId))
-            .data.tasks.keys().toSet().hasAll(unfinished);
+      function metadataPreserved(before, after) {
+        return (!('taskOrder' in before) || after.taskOrder == before.taskOrder)
+          && after.get('pinnedId', null) == before.get('pinnedId', null);
       }
-      function canArchive(before, after) {
-        return before.pendingDay == before.date
-          && after.keys().hasOnly(['owner', 'date', 'tasks', 'doneIds', 'archivedTo', 'updatedAt'])
-          && after.diff(before).affectedKeys().hasOnly(['archivedTo', 'pendingDay', 'updatedAt'])
+      function transferPresent(before, after) {
+        let old = before.get('carriedIds', []).toSet();
+        let carried = after.carriedIds.toSet();
+        let newly = carried.difference(old);
+        let unfinished = before.tasks.keys().toSet().difference(before.doneIds.toSet());
+        let destId = before.owner + '_' + after.carriedTo;
+        return after.carriedIds is list && carried.size() == after.carriedIds.size()
+          && carried.hasAll(old) && unfinished.hasAll(carried)
+          && (newly.size() == 0 || getAfter(/databases/$(database)/documents/pocket_space/notes_state/days/$(destId))
+            .data.tasks.keys().toSet().hasAll(newly));
+      }
+      function canCarry(before, after) {
+        let unfinished = before.tasks.keys().toSet().difference(before.doneIds.toSet());
+        return before.get('pendingDay', null) == before.date
+          && after.keys().hasOnly(['owner', 'date', 'tasks', 'doneIds', 'archivedTo', 'pendingDay', 'updatedAt',
+              'notesVersion', 'taskOrder', 'pinnedId', 'carriedIds', 'carriedTo'])
+          && after.diff(before).affectedKeys().hasOnly(['archivedTo', 'pendingDay', 'updatedAt',
+              'notesVersion', 'taskOrder', 'pinnedId', 'carriedIds', 'carriedTo'])
+          && metadataPreserved(before, after) && after.get('notesVersion', 0) == 2
           && request.time >= dayStart(before.date) + duration.value(1, 'd')
-          && validDate(after.archivedTo)
-          && request.time >= dayStart(after.archivedTo)
-          && request.time < dayStart(after.archivedTo) + duration.value(1, 'd')
-          && carriedIntoToday(before, after.archivedTo);
+          && validDate(after.carriedTo) && actualDate(after.carriedTo)
+          && request.time >= dayStart(after.carriedTo)
+          && request.time < dayStart(after.carriedTo) + duration.value(1, 'd')
+          && transferPresent(before, after)
+          && ((after.get('pendingDay', null) == before.date && !('archivedTo' in after))
+            || (!('pendingDay' in after) && after.archivedTo == after.carriedTo
+              && after.carriedIds.toSet().hasAll(unfinished)));
       }
 
       allow read: if true;
       allow create: if validDay(request.resource.data) && canEdit(request.resource.data);
       allow update: if validDay(request.resource.data)
-        && ((resource.data.pendingDay == resource.data.date && canEdit(request.resource.data))
-          || canArchive(resource.data, request.resource.data));
+        && request.resource.data.get('notesVersion', 0) >= resource.data.get('notesVersion', 0)
+        && ((resource.data.get('pendingDay', null) == resource.data.date && canEdit(request.resource.data))
+          || canCarry(resource.data, request.resource.data));
     }
   }
 }

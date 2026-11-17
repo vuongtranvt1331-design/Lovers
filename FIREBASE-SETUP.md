@@ -12,7 +12,7 @@ Từ thư mục bản Git Lovers, người quản trị Firebase có thể công
 
 Nếu dự án có thêm ứng dụng khác, kiểm tra và hợp nhất quy tắc của các ứng dụng trước khi công bố.
 
-Công bố bộ quy tắc này trước khi đưa bản lịch hoạt động và 9 cấp bonsai lên Pages. Quy tắc cho phép chuyển hoạt động theo lịch đã lưu, chặn bản cũ ghi đè lịch và hỗ trợ mục tiêu nước mới. Bộ quy tắc cũng cấp quyền cho cả hai hồ sơ sử dụng sổ của nhau và bảo vệ dữ liệu các ngày đã chốt. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật.
+Công bố bộ quy tắc này trước khi đưa bản việc ưu tiên và thanh nước mới lên Pages. Quy tắc kiểm tra hoạt động trong lịch hẹn, hỗ trợ phục hồi lịch cũ, liên kết log với bộ đếm và cho phép Notes lưu thứ tự/ghim/chuyển việc còn chờ. Tải lại Pocket Space trên cả hai thiết bị sau khi cập nhật để tránh tab cũ ghi đè cấu trúc mới.
 
 ## 2. Đưa mã lên GitHub Pages
 
@@ -36,7 +36,7 @@ Mở Mo-Pocket-Space.bat hoặc chạy lệnh sau.
 
 Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic với Node.js 22+.
 
-    node --test tests/state.test.mjs
+    node --test
 
 ## Dữ liệu
 
@@ -45,7 +45,9 @@ Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic vớ
 - Phút của các phiên ngắn được cộng theo từng hoạt động trong ngày. Khi đủ mốc, lượt thưởng và số giọt được ghi trong cùng một giao dịch. activityRewardClaims chặn nhận trùng khi làm lại cùng hoạt động trong ngày.
 - activitySchedule, scheduleAnchorAt và scheduleVersion trong mỗi hồ sơ lưu hai mốc tương lai. nextRewardAt là mốc nhận nước riêng, không kết thúc hoạt động. historyLoggedThrough giữ lịch sử đầy đủ khi hoạt động kéo dài nhiều ngày.
 - Bonsai balanceVersion 2 có 9 cấp, mỗi cấp 10 ngày. activityScheduleVersion chặn phiên bản cũ làm mất lịch. stageEvolutionAt ghi nhận ngày tiến hóa để hiển thị nền sáng.
+- rewardReceiptVersion 1 giữ các trường activityRewardAmounts và migrationGraceDate khi đã nâng cấp. Lượt thưởng cũ đọc từ query đúng ngày với cùng revision; nếu thiếu bằng chứng, ngày chuyển đổi được miễn phạt khi chưa đủ nước.
 - pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
 - pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
 - pocket_space/notes_state/days lưu danh sách ghi chú theo hồ sơ và ngày. Việc còn dở được chuyển vào ngày hiện tại khi mở lại sổ. Danh sách của ngày trước giữ kết quả đã chốt.
+- Notes notesVersion 2 lưu taskOrder và pinnedId. carriedIds/carriedTo trên nguồn cũ giữ tiến độ chuyển từng phần khi hôm nay đủ 300 mục, tránh phục hồi lại mục đã chủ động xóa. Bộ đếm trong khung cây chỉ hiển thị kho chưa tưới của hồ sơ hiện tại; thanh xanh biển chỉ tính nước đã tưới.
 - Firestore giữ dữ liệu đã đọc khi mất mạng. Thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Lịch sử IndexedDB của bản cũ vẫn ở trình duyệt gốc.

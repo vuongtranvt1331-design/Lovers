@@ -8,7 +8,7 @@ Xem [hướng dẫn Firestore và GitHub Pages](./FIREBASE-SETUP.md). Chạy tr�
 
 Bộ kiểm thử logic chạy với Node.js 22+.
 
-    node --test tests/state.test.mjs
+    node --test
 
 ## Hoạt động và bonsai
 
@@ -19,3 +19,12 @@ Bộ kiểm thử logic chạy với Node.js 22+.
 - **PPA** có “Đi chơi Thái Lan”. **TBV** có “Học tiếng Pháp”, đủ 40 phút nhận 8 giọt một lần/ngày, có thưởng học cùng nhau và dùng chung giới hạn học 20 giọt.
 
 Cập nhật **firestore.rules trước khi đưa mã mới lên Pages**, rồi tải lại trên cả hai thiết bị. Mục tiêu cũ còn đạt được giữ tới hết ngày nâng cấp; mốc cũ 186 giọt được điều chỉnh về 150. Nước đã có và nhật ký ngày cũ được giữ.
+
+## Giao diện hằng ngày
+
+- Hai thẻ luôn cạnh nhau: tên lớn ở bên trái, hoạt động bên phải; thời gian làm tròn xuống phút và huy hiệu nước nằm cùng dòng phía dưới. Dấu × là chưa nhận, dấu ✓ kèm số giọt là lượng thực nhận. Tin nhắn nhận và gửi xuất hiện trên thẻ tương ứng.
+- Dòng ngay dưới hai nhân vật nhắc việc hôm nay của hồ sơ đang chọn. Mặc định là việc chưa xong đầu danh sách; nút xoay chọn và ghim việc khác. Hoàn thành sẽ chuyển sang việc chưa xong tiếp theo.
+- Trong Notes, kéo nút ba chấm hoặc mở menu Lên/Xuống để đổi thứ tự; chọn Ghim để ưu tiên. Thứ tự, ghim và số việc hoàn thành đồng bộ giữa các thiết bị. Nếu hôm nay đầy, việc dư được giữ chờ; sổ người còn lại vẫn chuyển bình thường.
+- Huy hiệu ngày ở đầu trang mở bộ sưu tập bonsai; nút ? cạnh đó mở hướng dẫn. Thanh nước chỉ hiển thị nước đã tưới, dùng chung màu xanh biển. Bộ đếm nước chưa tưới của hồ sơ hiện tại nằm trong khung cây ở góc trên bên phải, đối xứng với huy hiệu ngày bên trái. Kho người còn lại không hiển thị.
+
+Bản cập nhật khôi phục chính xác lượt thưởng từ nhật ký cũ. Nếu dữ liệu ngày chuyển đổi thiếu, ngày đó được miễn phạt khi chưa đạt mục tiêu; tưới đủ vẫn được tiến độ bình thường. Các quy tắc chống giả giờ và tự tạo nước không thay đổi trong bản này.

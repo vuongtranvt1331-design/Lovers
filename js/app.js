@@ -2,31 +2,32 @@ import {
   ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS,
   STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO, STAGE_PROGRESSION_DAYS,
   DAILY_WATER_MAX_BY_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
-} from "./catalog.js?v=activity-plan-nine";
+} from "./catalog.js?v=daily-priority";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=activity-plan-nine";
-import { FocusState } from "./state.js?v=activity-plan-nine";
-import { Timeline } from "./timeline.js?v=activity-plan-nine";
-import { createQuestDrawer } from "./quests.js?v=activity-plan-nine";
-import { createNotesDrawer } from "./notes.js?v=activity-plan-nine";
-import { PocketDB } from "./db.js?v=activity-plan-nine";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=daily-priority";
+import { FocusState } from "./state.js?v=daily-priority";
+import { Timeline } from "./timeline.js?v=daily-priority";
+import { createQuestDrawer } from "./quests.js?v=daily-priority";
+import { createNotesDrawer } from "./notes.js?v=daily-priority";
+import { PocketDB } from "./db.js?v=daily-priority";
 import { offsetDay } from "./gameTime.js";
 
 const FocusUI = (() => {
   const byId = id => document.getElementById(id);
   const ui = Object.fromEntries([
     "appDate", "activeProfileName", "profileButton", "profileDialog", "profileClose", "choosePPA",
-    "chooseTBV", "plantCanvas", "plantPoke", "plantStage", "plantStatus", "partnerWater",
+    "chooseTBV", "plantCanvas", "plantPoke", "plantStage", "plantStageNumber", "plantStageName", "plantStatus", "partnerWater",
     "ownWater", "waterTotal", "waterTarget", "waterPartnerBar", "waterOwnBar", "rulesDialog", "rulesClose",
-    "plantHelp", "plantGalleryOpen", "plantGallery", "plantGalleryClose", "plantGalleryGrid", "rulesStreak", "galleryStreak",
+    "plantHelp", "plantGallery", "plantGalleryClose", "plantGalleryGrid", "rulesStreak", "galleryStreak",
     "ruleSleep", "ruleStudy", "ruleFocus", "ruleSport", "ruleChores", "ruleStageGrowth", "ruleStageMaintenance",
-    "plantAvailable", "plantWaterDialog", "plantWaterClose", "plantWaterDescription", "plantWaterConfirm",
+    "plantAvailable", "plantWaterBalance", "plantWaterDialog", "plantWaterClose", "plantWaterDescription", "plantWaterConfirm",
     "plantPPACanvas", "plantTBVCanvas", "plantWaterHeart",
     "streakText", "streakDots", "streakHint", "streakBadge", "streakBadgeText",
     "wiltToast", "wiltToastText", "wiltToastClose",
     "waterHistory", "partnerCanvas", "partnerPoke", "partnerName", "partnerActivity", "partnerElapsed", "speechBubble", "partnerEffects",
     "partnerDialog", "partnerClose", "messageForm", "messageInput", "quickActions", "ownCanvas",
     "ownPoke", "ownName", "ownActivity", "ownElapsed", "ownEffects", "timerStatus", "activityDialog", "activityClose", "dock",
+    "ownReward", "partnerReward", "ownSpeechBubble",
     "activitySlots", "activityPlanHint", "activityPlanCancel",
     "historyButton", "historyDialog", "historyClose", "appStatus", "togetherStatus", "togetherElapsed", "plant",
     "questDrawer", "questOpen", "questClose", "notesOpen",
@@ -88,11 +89,9 @@ const FocusUI = (() => {
     ui.appDate.textContent = localDate.format(now);
   }
 
-  function elapsed(ms, precise = false) {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 1) return seconds + " giây";
-    if (minutes < 60) return minutes + " phút" + (precise ? " " + seconds % 60 + " giây" : "");
+  function elapsed(ms) {
+    const minutes = Math.floor(Math.max(0, ms) / 60000);
+    if (minutes < 60) return minutes + " phút";
     return Math.floor(minutes / 60) + " giờ " + minutes % 60 + " phút";
   }
 
@@ -127,10 +126,15 @@ const FocusUI = (() => {
   }
 
   function renderClocks(now = Date.now()) {
-    ui.ownElapsed.textContent = ownStartTime == null ? "—" : elapsed(FocusState.elapsedMs(profile, now), true);
-    ui.partnerElapsed.textContent = partnerStartTime == null ? "—" : elapsed(FocusState.elapsedMs(partner(), now), true);
+    const ownTime = ownStartTime == null ? "0 phút" : elapsed(FocusState.elapsedMs(profile, now));
+    const partnerTime = partnerStartTime == null ? "0 phút" : elapsed(FocusState.elapsedMs(partner(), now));
+    if (ui.ownElapsed.textContent !== ownTime) ui.ownElapsed.textContent = ownTime;
+    if (ui.partnerElapsed.textContent !== partnerTime) ui.partnerElapsed.textContent = partnerTime;
     const matched = togetherWindow !== null && now >= togetherWindow.start && now < togetherWindow.end;
-    if (matched) ui.togetherElapsed.textContent = elapsed(now - togetherWindow.start, true);
+    if (matched) {
+      const sharedTime = elapsed(now - togetherWindow.start);
+      if (ui.togetherElapsed.textContent !== sharedTime) ui.togetherElapsed.textContent = sharedTime;
+    }
     if (matched !== together) {
       together = matched;
       ui.togetherStatus.hidden = !matched;
@@ -150,6 +154,7 @@ const FocusUI = (() => {
     const own = currentDay ? users[profile].waterDropsToday : 0;
     const other = currentDay ? users[partner()].waterDropsToday : 0;
     const total = own + other;
+    const available = currentDay ? users[profile].waterDropsAvailable ?? 0 : 0;
     const stage = plant.currentStage;
     const dry = plant.wilted;
     const plantScene = ui.plantPoke.closest(".plant-scene");
@@ -158,9 +163,10 @@ const FocusUI = (() => {
     plantScene.dataset.wilted = String(dry);
     plantScene.dataset.evolved = String(currentDay && !dry && plant.stageEvolutionAt != null
       && FocusState.today(plant.stageEvolutionAt) === plant.date && plant.stageEvolutionFrom < stage);
-    ui.plantStage.textContent = "Giai đoạn " + stage + " · " + plantNames[stage - 1];
-    ui.partnerWater.textContent = names[partner()] + " · " + other + " 💧";
-    ui.ownWater.textContent = names[profile] + " · " + own + " 💧";
+    ui.plantStageNumber.textContent = "Giai đoạn " + stage;
+    ui.plantStageName.textContent = plantNames[stage - 1];
+    ui.partnerWater.textContent = names[partner()] + " · " + other;
+    ui.ownWater.textContent = names[profile] + " · " + own;
     ui.waterTotal.textContent = String(total);
     ui.waterTarget.textContent = String(target);
     const shown = Math.max(target, total);
@@ -174,7 +180,7 @@ const FocusUI = (() => {
     const key = "bonsai_" + String(stage).padStart(2, "0") + (dry ? "_dry" : "_healthy");
     displayArt("plant", "plant", key, dry ? 1 : 5, 1);
     renderPlantWaterers(currentDay ? plant.date : null, users);
-    renderWaterControls(currentDay ? users[profile].waterDropsAvailable ?? 0 : 0, currentDay);
+    renderWaterControls(available, currentDay);
     renderStreak(plant, total, currentDay);
     if (currentDay) showWiltToastIfNeeded(plant);
   }
@@ -200,7 +206,9 @@ const FocusUI = (() => {
   }
 
   function renderWaterControls(available, currentDay) {
-    ui.plantAvailable.textContent = available + " 💧";
+    ui.plantAvailable.textContent = String(available);
+    ui.plantWaterBalance.title = names[profile] + " có " + available + " giọt chưa tưới";
+    ui.plantWaterBalance.setAttribute("aria-label", ui.plantWaterBalance.title);
     const description = !currentDay ? "Đang chờ đồng bộ số nước của ngày mới."
       : available > 0
       ? names[profile] + " có " + available + " giọt nước. Tưới hết số giọt này cho bonsai nhé?"
@@ -246,7 +254,7 @@ const FocusUI = (() => {
     const finalStage = stage === plantNames.length;
     const label = "Tiến trình " + days + " / " + streakGoal + " ngày";
     ui.streakText.textContent = label;
-    ui.streakBadgeText.textContent = days + "/" + streakGoal + " ngày";
+    ui.streakBadgeText.textContent = days + "/" + streakGoal;
     if (days === streakGoal && todayMet && !finalStage) {
       ui.streakHint.textContent = "Đủ ngày thứ " + streakGoal + " · 00:00 lên Giai đoạn " + (stage + 1)
         + " với mốc " + STAGE_TARGETS[stage] + " giọt.";
@@ -468,6 +476,9 @@ const FocusUI = (() => {
     const recent = latestMessage(messages, profile);
     ui.speechBubble.hidden = !recent;
     ui.speechBubble.textContent = recent ? (quick[recent.kind] || recent.text) : "";
+    const sent = latestMessage(messages, partner());
+    ui.ownSpeechBubble.hidden = !sent;
+    ui.ownSpeechBubble.textContent = sent ? (quick[sent.kind] || sent.text) : "";
 
     displayArt("own", profile, profile + "_" + own.currentActivity, 3, 2);
     displayArt("partner", partner(), partner() + "_" + other.currentActivity, 3, 2);
@@ -485,29 +496,27 @@ const FocusUI = (() => {
     for (const button of activityButtons) {
       button.hidden = !canSelectActivity(profile, button.dataset.activity);
     }
-    renderActivitySlots();
+    if (ui.activityDialog.open) renderActivitySlots();
   }
 
   function renderTimer(now = Date.now()) {
-    const info = FocusState.rewardInfo(profile, now);
-    let label;
-    if (ownStartTime == null) {
-      label = "Chọn một hoạt động để bắt đầu phiên.";
-    } else if (!info.category) {
-      label = "Hoạt động này không nhận nước tưới.";
-    } else if (info.claimedToday) {
-      label = "Đã nhận nước cho hoạt động này hôm nay. Đồng hồ vẫn tiếp tục.";
-    } else if (info.cap != null && info.creditedToday >= info.cap) {
-      label = "Đã nhận đủ " + info.cap + " giọt cho nhóm này hôm nay.";
-    } else if (info.wakeOnly) {
-      label = "Tính khi thức dậy · 7 giờ +5 giọt · 8 giờ đủ 10 giọt.";
-      if (info.carriedMs > 0) label = "Đã tích " + elapsed(info.carriedMs) + " ngủ · " + label;
-    } else {
-      const progress = Math.floor((info.progressMs ?? 0) / 60000);
-      const reward = Math.min(info.reward, (info.cap ?? Infinity) - info.creditedToday);
-      label = progress + "/" + info.minutes + " phút tích lũy · +" + reward + " giọt khi đủ.";
+    for (const [role, user] of [["own", profile], ["partner", partner()]]) {
+      const badge = ui[role + "Reward"];
+      const status = FocusState.activityRewardStatus(user, visibleKeys[role]?.slice(4), now);
+      badge.hidden = !status.eligible;
+      if (!status.eligible) continue;
+      const received = status.claimed && status.amount > 0;
+      if (!badge.firstChild) badge.innerHTML = '<span class="reward-drop" aria-hidden="true"><span class="drop"></span><b></b></span><span class="reward-amount" aria-hidden="true"></span>';
+      badge.dataset.claimed = String(received);
+      badge.querySelector("b").textContent = received ? "✓" : "×";
+      const amount = received ? status.amount : status.expected;
+      badge.querySelector(".reward-amount").textContent = String(amount);
+      const label = received ? "Đã nhận " + amount + " giọt hôm nay" : amount > 0
+        ? "Chưa nhận · " + amount + " giọt khi đủ thời gian" : "Không còn lượt nhận nước cho hoạt động này hôm nay";
+      badge.title = label;
+      badge.setAttribute("role", "img");
+      badge.setAttribute("aria-label", label);
     }
-    if (ui.timerStatus.textContent !== label) ui.timerStatus.textContent = label;
   }
 
   function render() {
@@ -621,6 +630,7 @@ const FocusUI = (() => {
     profile = user;
     try { sessionStorage.setItem("pocket-focus-profile", user); } catch {}
     ui.profileDialog.close();
+    notes.profileChanged();
     render();
   }
 
@@ -724,10 +734,15 @@ const FocusUI = (() => {
     for (const button of activityButtons) {
       button.setAttribute("aria-pressed", String(button.dataset.activity === chosen));
       button.disabled = savingActivity || (selectedActivitySlot > 0 && start <= now);
+      const status = FocusState.activityRewardStatus(profile, button.dataset.activity, start);
+      const mark = button.querySelector(".activity-claim-mark");
+      mark.hidden = !(status.claimed && status.amount > 0);
+      button.setAttribute("aria-label", ACTIVITY_TITLES.get(button.dataset.activity)
+        + (status.claimed && status.amount > 0 ? " · Đã nhận nước hôm nay" : ""));
     }
     ui.activityPlanHint.textContent = selectedActivitySlot === 0
       ? "Đổi ngay. Hoạt động tiếp tục chạy sau khi nhận nước."
-      : start <= now ? "Mốc này đã qua. Mở lại để đặt lịch mới."
+      : start <= now ? "Mốc này đã qua. Chọn mốc còn lại hoặc bỏ lịch cũ."
         : "Tự chuyển lúc " + planClock.format(start) + ". Chọn một hoạt động bên dưới để lưu.";
     ui.activityPlanCancel.hidden = !selected;
     ui.activityPlanCancel.disabled = savingActivity;
@@ -755,11 +770,19 @@ const FocusUI = (() => {
         button.className = "activity-button";
         button.dataset.activity = id;
         const glyph = document.createElement("span");
+        glyph.className = "activity-icon";
         glyph.setAttribute("aria-hidden", "true");
         glyph.textContent = icon;
         const caption = document.createElement("span");
+        caption.className = "activity-label";
         caption.textContent = name;
-        button.append(glyph, caption);
+        const claimMark = document.createElement("span");
+        claimMark.className = "activity-claim-mark activity-reward";
+        claimMark.dataset.claimed = "true";
+        claimMark.setAttribute("aria-hidden", "true");
+        claimMark.hidden = true;
+        claimMark.innerHTML = '<span class="reward-drop"><span class="drop"></span><b>✓</b></span>';
+        button.append(glyph, caption, claimMark);
         button.addEventListener("click", async () => {
           if (savingActivity) return;
           const user = profile;
@@ -767,6 +790,11 @@ const FocusUI = (() => {
           const slot = selectedActivitySlot;
           const at = Date.now();
           if (slot === 0 && current.currentActivity === id) { ui.activityDialog.close(); return; }
+          if (slot > 0 && current.activitySchedule?.some(entry => entry.slot === slot && entry.activity === id)) {
+            showActionStatus("");
+            renderActivitySlots();
+            return;
+          }
           savingActivity = true;
           renderActivitySlots();
           try {
@@ -798,6 +826,7 @@ const FocusUI = (() => {
     if (ui.activityDialog.open) renderActivitySlots(now);
     if (FocusState.today(now) !== plantRenderDay) {
       renderPlant(now);
+      quests.render();
       if (ui.rulesDialog.open) renderWaterHistory();
       syncRenderScope();
     }
@@ -890,12 +919,8 @@ const FocusUI = (() => {
       openDialog(ui.plantWaterDialog);
     });
     ui.plantWaterConfirm.addEventListener("click", () => void waterPlant());
-    ui.plantGalleryOpen.addEventListener("click", openPlantGallery);
     ui.plantHelp.addEventListener("click", openPlantRules);
-    ui.streakBadge.addEventListener("click", () => {
-      ui.plant.focus({ preventScroll: true });
-      ui.plant.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-    });
+    ui.streakBadge.addEventListener("click", openPlantGallery);
     ui.questOpen.addEventListener("click", () => { openDialog(ui.questDrawer); quests.render(); });
     ui.questClose.addEventListener("click", () => ui.questDrawer.close());
     ui.notesOpen.addEventListener("click", () => void notes.open());

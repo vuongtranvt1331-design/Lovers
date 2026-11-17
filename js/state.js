@@ -1,6 +1,6 @@
 import { BALANCE_VERSION, canSelectActivity, DAILY_QUESTS, DAILY_WATER_MAX, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP,
-  STAGE_PROGRESSION_DAYS, STAGE_TARGETS, WATER_ACTIVITY_CATEGORIES, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=activity-plan-nine';
-import { PocketDB } from './db.js?v=activity-plan-nine';
+  STAGE_PROGRESSION_DAYS, STAGE_TARGETS, WATER_ACTIVITY_CATEGORIES, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=daily-priority';
+import { PocketDB } from './db.js?v=daily-priority';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, offsetDay, timestamp, today } from './gameTime.js';
 
 export const FocusState = (() => {
@@ -15,6 +15,7 @@ export const FocusState = (() => {
   const MISSED_DAYS_PER_DROP = 3;
   const MAX_CATCH_UP_DAYS = 366;
   const MANUAL_WATERING_VERSION = 1;
+  const REWARD_RECEIPT_VERSION = 1;
   const ACTIVITY_SCHEDULE_VERSION = 1;
   const MAX_SETTLEMENT_EVENTS = 48;
   const SLEEP_TIERS = WATER_REWARDS.sleep.tiers;
@@ -88,6 +89,18 @@ export const FocusState = (() => {
     return [...entries.values()].sort((a, b) => a.startsAt - b.startsAt);
   }
 
+  function scheduleNeedsRecovery(raw, activitySchedule, anchor) {
+    if (!raw || (!Object.hasOwn(raw, 'activitySchedule') && !Object.hasOwn(raw, 'scheduleAnchorAt'))) return false;
+    const stored = raw.activitySchedule === undefined ? [] : raw.activitySchedule;
+    const same = Array.isArray(stored) && stored.length === activitySchedule.length && stored.every((entry, index) => {
+      const expected = activitySchedule[index];
+      return entry && typeof entry === 'object' && !Array.isArray(entry)
+        && Object.keys(entry).length === 3 && Object.keys(entry).every(key => ['slot', 'activity', 'startsAt'].includes(key))
+        && entry.slot === expected.slot && entry.activity === expected.activity && entry.startsAt === expected.startsAt;
+    });
+    return !same || (raw.scheduleAnchorAt ?? null) !== anchor;
+  }
+
   function activityDeadline(activity, start, target, progress, day) {
     if (start === null) return null;
     const rule = ruleFor(activity);
@@ -120,6 +133,7 @@ export const FocusState = (() => {
     const nextRewardAt = rule?.minutes ? hasRewardCursor ? timestamp(raw.nextRewardAt)
       : timestamp(raw.plannedEndTime) ?? activityDeadline(currentActivity, startTime, rewardTargetMs, rewardProgress, day) : null;
     const activitySchedule = readSchedule(key, raw);
+    const scheduleAnchorAt = activitySchedule.length ? timestamp(raw.scheduleAnchorAt) : null;
     const pairedFocusMs = explicitSession ? bounded(raw.pairedFocusMs, 0, rewardTargetMs ?? 0) : 0;
     const pairedFocusThrough = explicitSession ? Math.max(startTime, timestamp(raw.pairedFocusThrough) ?? startTime) : null;
     const pairedFocusTodayMs = explicitSession ? bounded(raw.pairedFocusTodayMs,
@@ -144,9 +158,12 @@ export const FocusState = (() => {
       rewardTargetMs,
       activityRewardClaims: raw?.waterDate === day && raw?.activityRewardClaims
         ? Object.fromEntries(Object.entries(raw.activityRewardClaims).filter(([activity, claimed]) => claimed === true && ruleFor(activity))) : {},
+      activityRewardAmounts: raw?.waterDate === day && raw?.activityRewardAmounts
+        ? Object.fromEntries(Object.entries(raw.activityRewardAmounts).filter(([activity, amount]) => ruleFor(activity)
+          && Number.isSafeInteger(amount) && amount > 0)) : {},
       activitySchedule,
-      scheduleAnchorAt: activitySchedule.length ? timestamp(raw.scheduleAnchorAt) : null,
-      scheduleVersion: bounded(raw?.scheduleVersion, 0),
+      scheduleAnchorAt,
+      scheduleVersion: bounded(raw?.scheduleVersion, 0) + Number(Boolean(scheduleNeedsRecovery(raw, activitySchedule, scheduleAnchorAt))),
       lastWateredDate: dateStart(raw?.lastWateredDate) !== null && raw.lastWateredDate <= day
         ? raw.lastWateredDate : null,
       creditedActivityStartTime: explicitSession && raw.creditedActivityStartTime === startTime ? startTime : null,
@@ -183,7 +200,7 @@ export const FocusState = (() => {
     const date = storedDate ?? today(now);
     const historyStatusByDate = Object.fromEntries(Object.entries(raw?.historyStatusByDate || {})
       .filter(([key, status]) => dateStart(key) !== null && key <= date
-        && (status === 'success' || status === 'failed')));
+        && ['success', 'failed', 'grace'].includes(status)));
     const waterHistoryByDate = Object.fromEntries(Object.entries(raw?.waterHistoryByDate || {})
       .filter(([key]) => dateStart(key) !== null && key <= date)
       .map(([key, totals]) => [key, { ppa: bounded(totals?.ppa, 0), tbv: bounded(totals?.tbv, 0) }]));
@@ -226,9 +243,12 @@ export const FocusState = (() => {
       wilted: raw?.wilted === true,
       wateringVersion: bounded(raw?.wateringVersion, raw ? 0 : MANUAL_WATERING_VERSION),
       rewardProgressVersion: Math.max(1, bounded(raw?.rewardProgressVersion, 1)),
+      rewardReceiptVersion: Math.max(REWARD_RECEIPT_VERSION, bounded(raw?.rewardReceiptVersion, REWARD_RECEIPT_VERSION)),
       balanceVersion: Math.max(BALANCE_VERSION, bounded(raw?.balanceVersion, BALANCE_VERSION)),
       activityScheduleVersion: Math.max(ACTIVITY_SCHEDULE_VERSION, bounded(raw?.activityScheduleVersion, ACTIVITY_SCHEDULE_VERSION)),
       legacyTargetDate,
+      migrationGraceDate: dateStart(raw?.migrationGraceDate) !== null && raw.migrationGraceDate <= date
+        ? raw.migrationGraceDate : null,
       stageEvolutionAt: migrating ? null : timestamp(raw?.stageEvolutionAt),
       stageEvolutionFrom: migrating ? null : Number.isSafeInteger(raw?.stageEvolutionFrom)
         && raw.stageEvolutionFrom >= 1 && raw.stageEvolutionFrom < currentStage ? raw.stageEvolutionFrom : null,
@@ -250,6 +270,58 @@ export const FocusState = (() => {
       }))
       .sort((a, b) => a.order - b.order || a.at - b.at || a.id.localeCompare(b.id))
       .slice(-MESSAGE_LIMIT);
+  }
+
+  function migrateActivityRewards(user, saved, plant, logs) {
+    if (!saved || (Object.hasOwn(saved, 'activityRewardClaims') && Object.hasOwn(saved, 'activityRewardAmounts'))) return;
+    const amounts = {};
+    const categoryTotals = categories();
+    const seen = new Set();
+    for (const entry of logs) {
+      if (entry.kind !== 'pomodoro' || userKey(entry.user) !== user.id) continue;
+      const end = timestamp(entry.endTimestamp);
+      const creditDate = dateStart(entry.creditDate) !== null ? entry.creditDate : end === null ? null : today(end);
+      if (creditDate !== plant.date || (entry.id && seen.has(entry.id))) continue;
+      if (entry.id) seen.add(entry.id);
+      const rule = ruleFor(entry.activity);
+      const amount = bounded(entry.awardedWater, bounded(entry.waterDrops, 0));
+      if (!rule || !amount) continue;
+      amounts[entry.activity] = (amounts[entry.activity] ?? 0) + amount;
+      categoryTotals[rule.category] += amount;
+    }
+    for (const [activity, amount] of Object.entries(amounts)) {
+      user.activityRewardAmounts[activity] = amount;
+      user.activityRewardClaims[activity] = true;
+    }
+    for (const [category] of Object.entries(WATER_REWARDS)) {
+      const paid = creditedOn(plant, user, category, plant.date);
+      const choices = [...activityRules].filter(([activity, rule]) => rule.category === category
+        && canSelectActivity(user.id, activity));
+      if (paid > 0 && choices.length === 1) {
+        amounts[choices[0][0]] = paid;
+        categoryTotals[category] = paid;
+      }
+      if (categoryTotals[category] === paid) {
+        // Replace the earlier category-wide migration flags with exact receipts.
+        for (const [activity, rule] of activityRules) {
+          if (rule.category !== category) continue;
+          delete user.activityRewardClaims[activity];
+          delete user.activityRewardAmounts[activity];
+          if (amounts[activity] > 0) {
+            user.activityRewardClaims[activity] = true;
+            user.activityRewardAmounts[activity] = amounts[activity];
+          }
+        }
+        continue;
+      }
+      plant.migrationGraceDate = plant.date;
+      // Unknown historical recipients stay claimed to avoid paying the same work twice.
+      if (paid > categoryTotals[category]) {
+        for (const [activity, rule] of activityRules) {
+          if (rule.category === category) user.activityRewardClaims[activity] = true;
+        }
+      }
+    }
   }
 
   function normalize(raw, now, legacyLogs = []) {
@@ -280,14 +352,13 @@ export const FocusState = (() => {
       const recorded = plant.waterHistoryByDate[plant.date]?.[key] ?? 0;
       const user = users[key];
       user.waterDropsToday = Math.max(user.waterDropsToday, recorded);
-      if (raw?.users?.[key] && !Object.hasOwn(raw.users[key], 'activityRewardClaims')) {
-        for (const [activity, rule] of activityRules) {
-          if (!rule.wakeOnly && creditedOn(plant, user, rule.category, plant.date) > 0) user.activityRewardClaims[activity] = true;
-        }
-      }
+      migrateActivityRewards(user, raw?.users?.[key], plant, legacyLogs);
       if (user.activityRewardClaims[user.currentActivity]) user.nextRewardAt = null;
       const paidSleep = creditedOn(plant, user, 'sleep', plant.date);
-      if (paidSleep > 0) user.activityRewardClaims.home_sleeping = true;
+      if (paidSleep > 0) {
+        user.activityRewardClaims.home_sleeping = true;
+        user.activityRewardAmounts.home_sleeping = paidSleep;
+      }
       const sleepTier = SLEEP_TIERS.findLast(tier => tier.reward <= paidSleep);
       if (sleepTier && (user.rewardProgress.home_sleeping?.elapsedMs ?? 0) < sleepTier.minutes * MINUTE) {
         user.rewardProgress.home_sleeping = { elapsedMs: sleepTier.minutes * MINUTE, pairedMs: 0 };
@@ -332,6 +403,10 @@ export const FocusState = (() => {
       }
       return;
     }
+    if (plant.migrationGraceDate === plant.date) {
+      plant.historyStatusByDate[plant.date] = 'grace';
+      return;
+    }
     plant.historyStatusByDate[plant.date] = 'failed';
     if (plant.shieldAvailable) {
       plant.shieldAvailable = false;
@@ -370,6 +445,7 @@ export const FocusState = (() => {
         users[key].waterDropsAvailable = 0;
         users[key].rewardProgress = {};
         users[key].activityRewardClaims = {};
+        users[key].activityRewardAmounts = {};
         const user = users[key];
         if (user.explicitSession && user.nextRewardAt === null) beginRewardBlock(user, dateStart(plant.date));
       }
@@ -398,6 +474,7 @@ export const FocusState = (() => {
     if (granted <= 0) return false;
     const daily = plant.rewardHistoryByDate[creditDate] ??= dayCategories();
     daily[user.id][rule.category] = used + granted;
+    user.activityRewardAmounts[user.currentActivity] = (user.activityRewardAmounts[user.currentActivity] ?? 0) + granted;
     if (plant.wateringVersion < MANUAL_WATERING_VERSION) {
       user.waterDropsToday += granted;
       updateTarget(draft);
@@ -590,6 +667,8 @@ export const FocusState = (() => {
     if (day < draft.plant.date) {
       return { draft, logs, result: false };
     }
+    if (USERS.some(key => scheduleNeedsRecovery(raw?.users?.[key], draft.users[key].activitySchedule,
+      draft.users[key].scheduleAnchorAt))) return { draft, logs, result: false, pendingSettlement: true };
     for (const user of Object.values(draft.users)) {
       if (user.currentActivity === IDLE) user.idleStartedAt ??= now;
       user.historyLoggedThrough ??= user.startTime ?? user.idleStartedAt;
@@ -603,6 +682,8 @@ export const FocusState = (() => {
 
   function requiresLegacyLogs(raw) {
     return Object.values(raw.users).some(user => Object.hasOwn(user, 'timerStatus'))
+      || Object.values(raw.users).some(user => !Object.hasOwn(user, 'activityRewardAmounts')
+        || !Object.hasOwn(user, 'activityRewardClaims'))
       || (raw.plant && !Object.hasOwn(raw.plant, 'rewardHistoryByDate'));
   }
 
@@ -655,7 +736,8 @@ export const FocusState = (() => {
       users: Object.fromEntries(USERS.map(key => {
         const user = current.users[key];
         return [key, { ...user, activitySchedule: user.activitySchedule.map(item => ({ ...item })),
-          activityRewardClaims: { ...user.activityRewardClaims }, rewardProgress: Object.fromEntries(Object.entries(user.rewardProgress)
+          activityRewardClaims: { ...user.activityRewardClaims }, activityRewardAmounts: { ...user.activityRewardAmounts },
+          rewardProgress: Object.fromEntries(Object.entries(user.rewardProgress)
           .map(([activity, progress]) => [activity, { ...progress }])) }];
       })),
       plant: {
@@ -692,6 +774,29 @@ export const FocusState = (() => {
       ]));
       return { logs, users };
     });
+  }
+
+  function activityRewardStatus(value, activity, now = Date.now()) {
+    const key = userKey(value);
+    const rule = ruleFor(activity);
+    if (!key || !rule || !canSelectActivity(key, activity)) return { eligible: false, claimed: false, amount: 0, expected: 0 };
+    const instant = time(now);
+    const state = model ?? normalize(null, instant);
+    const user = state.users[key];
+    const day = today(instant);
+    const claimed = user.waterDate === day && user.activityRewardClaims[activity] === true;
+    const amount = user.waterDate === day ? user.activityRewardAmounts[activity] ?? 0 : 0;
+    let expected = rule.reward;
+    if (rule.wakeOnly) {
+      const carry = user.waterDate === day ? user.rewardProgress[activity]?.elapsedMs ?? 0 : 0;
+      const elapsed = user.currentActivity === activity ? Math.max(0, instant - user.startTime) : 0;
+      expected = SLEEP_TIERS.findLast(tier => carry + elapsed >= tier.minutes * MINUTE)?.reward ?? SLEEP_TIERS[0].reward;
+    } else if (rule.pairGroup && user.currentActivity === activity && user.nextRewardAt !== null) {
+      const paired = pairedDuration(user, state.users[partnerOf(user)], instant) + (carriedIntoDeadline(user)?.pairedMs ?? 0);
+      if (paired * 5 >= user.rewardTargetMs * 4) expected = Math.ceil(rule.reward * 1.2);
+    }
+    const remaining = rule.cap === null ? expected : Math.max(0, rule.cap - creditedOn(state.plant, user, rule.category, day));
+    return { eligible: true, claimed, amount, expected: claimed ? 0 : Math.min(expected, remaining) };
   }
 
   return {
@@ -876,6 +981,7 @@ export const FocusState = (() => {
     targetMs(value) {
       return model?.users[userKey(value)]?.rewardTargetMs ?? null;
     },
+    activityRewardStatus,
     pairGroup(activity) { return ruleFor(activity)?.pairGroup ?? null; },
 
     rewardInfo(value, now = Date.now()) {
@@ -891,6 +997,7 @@ export const FocusState = (() => {
       const claimedToday = user?.waterDate === day && user.activityRewardClaims[user.currentActivity] === true;
       const pairedMs = rule?.pairGroup
         ? pairedDuration(user, model.users[partnerOf(user)], instant) + (carry?.pairedMs ?? 0) : 0;
+      const status = activityRewardStatus(value, user?.currentActivity, instant);
       return {
         category: rule?.category ?? null,
         minutes: user?.rewardTargetMs != null ? user.rewardTargetMs / MINUTE : null,
@@ -898,6 +1005,10 @@ export const FocusState = (() => {
         cap: rule?.cap ?? null,
         creditedToday: rule ? creditedOn(model.plant, user, rule.category, day) : 0,
         claimedToday,
+        awardedToday: status.amount,
+        expectedReward: status.expected,
+        eligibility: !status.eligible ? 'no_reward' : status.claimed ? 'claimed'
+          : status.expected === 0 ? 'daily_cap' : rule?.wakeOnly ? 'wake_only' : 'eligible',
         progressMs: target === null ? 0 : claimedToday ? target
           : Math.min(target, carriedMs + Math.max(0, instant - user.rewardBlockStartedAt)),
         carriedMs,

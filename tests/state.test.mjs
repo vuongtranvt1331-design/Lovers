@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { ACTIVITY_TITLES, BALANCE_VERSION, DAILY_WATER_MAX, DAILY_WATER_MAX_BY_PROFILE, DAILY_WATER_MAX_PER_PROFILE, spriteURL,
   STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO, STAGE_TARGETS } from '../js/catalog.js';
-import { PocketDB, splitLog } from '../js/db.js?v=activity-plan-nine';
+import { PocketDB, splitLog } from '../js/db.js?v=daily-priority';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, today } from '../js/gameTime.js';
 import { FocusState } from '../js/state.js';
 import { FocusState as PeerState } from '../js/state.js?peer';
@@ -21,9 +21,10 @@ beforeEach(() => {
   FocusState.clearRemote();
   room = { users: {}, plant: null, messages: [], revision: 0 };
   logs = [];
-  PocketDB.mutate = async (transform, _needsLegacyLogs, options) => {
+  PocketDB.mutate = async (transform, needsLegacyLogs, options) => {
     assert.ok(options.actor && options.action);
-    const change = transform(structuredClone(room), []);
+    const migrationLogs = needsLegacyLogs(room) ? logs.filter(entry => entry.dateStr === room.plant?.date) : [];
+    const change = transform(structuredClone(room), structuredClone(migrationLogs));
     const current = { users: room.users, plant: room.plant, messages: room.messages };
     const changed = JSON.stringify(current) !== JSON.stringify(change.draft) || change.logs.length;
     const revision = room.revision + Number(Boolean(changed));
@@ -37,9 +38,25 @@ beforeEach(() => {
   });
 });
 
+test('Firestore map key order does not cause a false queue repair', async () => {
+  await FocusState.open(noon);
+  await FocusState.scheduleActivity('ppa', 'home_gaming', noon + 60 * MINUTE, 1, noon, noon);
+  const version = room.users.ppa.scheduleVersion;
+  room.users.ppa.activitySchedule = [{ startsAt: noon + 60 * MINUTE, activity: 'home_gaming', slot: 1 }];
+  FocusState.clearRemote();
+  await FocusState.open(noon + MINUTE);
+  assert.equal(room.users.ppa.scheduleVersion, version);
+  assert.equal(room.users.ppa.activitySchedule[0].activity, 'home_gaming');
+  room.users.ppa.activitySchedule[0].obsoleteField = true;
+  await FocusState.refresh(noon + MINUTE);
+  assert.equal(room.users.ppa.scheduleVersion, version + 1);
+  assert.deepEqual(Object.keys(room.users.ppa.activitySchedule[0]).sort(), ['activity', 'slot', 'startsAt']);
+});
+
 test('fresh profiles are idle and legacy default clocks do not earn passive rewards', async () => {
   room.users.ppa = { currentActivity: 'home_desk_work', startTime: noon - 100 * MINUTE };
   await FocusState.open(noon);
+  assert.equal(FocusState.data.plant.rewardReceiptVersion, 1);
   for (const user of Object.values(FocusState.data.users)) {
     assert.equal(user.currentActivity, 'home_idle');
     assert.equal(user.startTime, null);
@@ -94,6 +111,9 @@ test('French study is exclusive to TBV and shares the study group while earning 
   await FocusState.refresh(noon + STUDY);
   assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 10);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 10);
+  assert.deepEqual(FocusState.activityRewardStatus('tbv', activity, noon + STUDY),
+    { eligible: true, claimed: true, amount: 10, expected: 0 });
+  assert.equal(FocusState.rewardInfo('tbv', noon + STUDY).awardedToday, 10);
   await FocusState.changeActivity('tbv', 'home_studying', noon + STUDY);
   await FocusState.refresh(noon + 2 * STUDY);
   assert.equal(FocusState.data.users.tbv.waterDropsAvailable, 20);
@@ -283,6 +303,63 @@ test('old automatic contributions survive upgrade without marking a manual pour'
   assert.equal(FocusState.data.users.ppa.lastWateredDate, day);
 });
 
+test('indexed reward history recovers exact activity claims without blocking unearned activities', async () => {
+  room.plant = { date: day, balanceVersion: 1, currentStage: 5, targetDrops: 186, wateringVersion: 1,
+    rewardHistoryByDate: { [day]: { ppa: { focus: 6 }, tbv: { focus: 6 } } } };
+  for (const user of ['ppa', 'tbv']) {
+    room.users[user] = { currentActivity: 'home_idle', waterDate: day, waterDropsAvailable: 6,
+      activityRewardClaims: { home_desk_work: true, work_locked_in: true, work_teaching: true } };
+    logs.push(...splitLog({ id: 'legacy-' + user, user, activity: 'work_locked_in', kind: 'pomodoro',
+      startTimestamp: noon - FOCUS, endTimestamp: noon, durationMinutes: 50, waterDrops: 6, creditDate: day }, 0));
+  }
+  await FocusState.open(noon);
+  assert.equal(FocusState.data.plant.migrationGraceDate, null);
+  assert.deepEqual(FocusState.activityRewardStatus('ppa', 'work_locked_in', noon),
+    { eligible: true, claimed: true, amount: 6, expected: 0 });
+  assert.deepEqual(FocusState.activityRewardStatus('ppa', 'work_teaching', noon),
+    { eligible: true, claimed: false, amount: 0, expected: 6 });
+  assert.equal(FocusState.data.users.ppa.activityRewardClaims.home_desk_work, undefined);
+  await FocusState.changeActivity('ppa', 'work_teaching', noon);
+  await FocusState.refresh(noon + FOCUS);
+  assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 12);
+  assert.equal(FocusState.data.users.ppa.activityRewardAmounts.work_teaching, 6);
+  const snapshot = FocusState.data;
+  snapshot.users.ppa.activityRewardAmounts.work_teaching = 999;
+  assert.equal(FocusState.rewardInfo('ppa', noon + FOCUS).awardedToday, 6);
+});
+
+test('insufficient legacy reward history gives a neutral migration day instead of an impossible penalty', async () => {
+  room.plant = { date: day, balanceVersion: 1, currentStage: 5, streakDays: 5, targetDrops: 186,
+    shieldAvailable: true, consecutiveMissedDays: 2, wateringVersion: 1,
+    rewardHistoryByDate: { [day]: { ppa: { focus: 6 }, tbv: { focus: 6 } } } };
+  for (const user of ['ppa', 'tbv']) room.users[user] = {
+    currentActivity: 'home_idle', waterDate: day, waterDropsAvailable: 6,
+  };
+  await FocusState.open(noon);
+  assert.equal(FocusState.data.plant.migrationGraceDate, day);
+  assert.equal(FocusState.activityRewardStatus('ppa', 'work_teaching', noon).claimed, true);
+  assert.equal(FocusState.activityRewardStatus('ppa', 'work_teaching', noon).amount, 0);
+  await FocusState.refresh(midnight);
+  assert.equal(FocusState.data.plant.historyStatusByDate[day], 'grace');
+  assert.equal(FocusState.data.plant.streakDays, 5);
+  assert.equal(FocusState.data.plant.shieldAvailable, true);
+  assert.equal(FocusState.data.plant.consecutiveMissedDays, 2);
+  assert.equal(FocusState.data.plant.currentStage, 9);
+  assert.equal(FocusState.data.plant.wilted, false);
+  FocusState.clearRemote();
+  assert.equal(FocusState.applyRemote(room), true);
+  assert.equal(FocusState.data.plant.historyStatusByDate[day], 'grace');
+});
+
+test('a migration grace day earns normal success when actual watering reaches its quota', async () => {
+  room.plant = { date: day, balanceVersion: BALANCE_VERSION, currentStage: 2, streakDays: 9,
+    stageGrowthDays: 9, migrationGraceDate: day, waterHistoryByDate: { [day]: { ppa: 50, tbv: 50 } } };
+  await FocusState.open(midnight);
+  assert.equal(FocusState.data.plant.historyStatusByDate[day], 'success');
+  assert.equal(FocusState.data.plant.currentStage, 3);
+  assert.equal(FocusState.data.plant.streakDays, 0);
+});
+
 test('stale revisions and timestamps cannot overwrite a newer activity or a closed day', async () => {
   await FocusState.open(noon);
   await FocusState.changeActivity('ppa', 'home_gaming', noon + MINUTE, 1);
@@ -353,6 +430,37 @@ test('schedule edits use a separate version and immediate changes retain future 
   PocketDB.mutate = async () => { throw new Error('offline'); };
   await assert.rejects(FocusState.scheduleActivity('tbv', 'home_football', noon + hour, 1, noon, noon, 2), /offline/);
   assert.deepEqual(FocusState.data.users.tbv.activitySchedule, []);
+});
+
+test('invalid legacy queue entries are repaired before a valid due slot is consumed', async () => {
+  await FocusState.open(noon);
+  room.users.ppa.activitySchedule = [
+    { slot: 1, activity: 'retired_activity', startsAt: noon + 60 * MINUTE },
+    { slot: 2, activity: 'home_gaming', startsAt: noon + 120 * MINUTE },
+  ];
+  room.users.ppa.scheduleAnchorAt = noon;
+  room.users.ppa.scheduleVersion = 4;
+  const commit = PocketDB.mutate;
+  let repaired = false;
+  PocketDB.mutate = async (transform, legacy, options) => commit((raw, history) => {
+    const change = transform(raw, history);
+    if (!repaired) {
+      assert.equal(change.pendingSettlement, true);
+      assert.equal(change.logs.length, 0);
+      assert.equal(change.draft.users.ppa.currentActivity, raw.users.ppa.currentActivity);
+      assert.equal(change.draft.users.ppa.sessionVersion, raw.users.ppa.sessionVersion);
+      assert.equal(change.draft.users.ppa.scheduleVersion, 5);
+      assert.equal(change.draft.users.ppa.activitySchedule.length, 1);
+      repaired = true;
+    }
+    return change;
+  }, legacy, options);
+  await FocusState.refresh(noon + 125 * MINUTE);
+  assert.equal(repaired, true);
+  assert.equal(FocusState.data.users.ppa.currentActivity, 'home_gaming');
+  assert.equal(FocusState.data.users.ppa.startTime, noon + 120 * MINUTE);
+  assert.equal(FocusState.data.users.ppa.scheduleVersion, 6);
+  assert.deepEqual(FocusState.data.users.ppa.activitySchedule, []);
 });
 
 test('same-activity scheduled slots do not re-award and a running session becomes eligible next day', async () => {
@@ -618,6 +726,7 @@ test('the daily category cap is shared and awards any remaining portion', async 
     await FocusState.refresh(instant);
     available += reward;
     assert.equal(FocusState.data.users.ppa.waterDropsAvailable, available);
+    assert.equal(FocusState.activityRewardStatus('ppa', activity, instant).amount, reward);
   }
 });
 
@@ -657,6 +766,8 @@ test('sleep pays only the first eligible wake from cumulative same-day sleep', a
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 5);
   assert.deepEqual(logs.filter(log => log.awardedWater > 0).map(log => log.awardedWater), [5]);
   assert.equal(FocusState.data.users.ppa.activityRewardClaims.home_sleeping, true);
+  assert.deepEqual(FocusState.activityRewardStatus('ppa', 'home_sleeping', midnight + 10 * hour),
+    { eligible: true, claimed: true, amount: 5, expected: 0 });
   await FocusState.changeActivity('ppa', 'home_sleeping', midnight + DAY_MS);
   await FocusState.changeActivity('ppa', 'home_idle', midnight + DAY_MS + 8 * hour);
   assert.equal(FocusState.data.users.ppa.waterDropsAvailable, 10);

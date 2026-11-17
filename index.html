@@ -6,10 +6,10 @@
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#F4F8F3">
 <title>Pocket Space</title>
-<link rel="stylesheet" href="./css/style.css">
-<link rel="stylesheet" href="./css/components.css?v=activity-plan-nine">
-<link rel="stylesheet" href="./css/modals.css?v=activity-plan-nine">
-<link rel="stylesheet" href="./css/notes.css?v=activity-plan-nine">
+<link rel="stylesheet" href="./css/style.css?v=daily-priority">
+<link rel="stylesheet" href="./css/components.css?v=daily-priority">
+<link rel="stylesheet" href="./css/modals.css?v=daily-priority">
+<link rel="stylesheet" href="./css/notes.css?v=daily-priority">
 </head>
 <body>
 <a class="skip-link" href="#main">Đến nội dung chính</a>
@@ -19,11 +19,12 @@
       <h1>Pocket Space</h1>
       <p class="date-line small muted" id="appDate">Hôm nay</p>
     </div>
-    <button type="button" class="streak-badge" id="streakBadge" aria-controls="plant" aria-describedby="streakShortcutLabel syncStatus" title="Đến khu vườn bonsai">
+    <button type="button" class="streak-badge" id="streakBadge" aria-controls="plantGallery" aria-haspopup="dialog" aria-describedby="streakShortcutLabel syncStatus" title="Xem các giai đoạn bonsai">
       <svg class="sprig-icon" viewBox="0 0 12 13" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 5h2v8H5zM0 2h4v2h1v3H2V5H0zm8 0h1V0h3v3h-1v2H9v2H7V4h1z"></path></svg>
-      <span class="mono" id="streakBadgeText">0/10 ngày</span>
-      <span class="sr-only" id="streakShortcutLabel">Đến khu vườn bonsai</span>
+      <span class="mono" id="streakBadgeText">0/10</span>
+      <span class="sr-only" id="streakShortcutLabel">ngày · Xem các giai đoạn bonsai</span>
     </button>
+    <button class="quick-tool top-help" id="plantHelp" type="button" aria-haspopup="dialog" aria-controls="rulesDialog" aria-label="Cách chăm bonsai và lịch sử tưới nước">?</button>
     <button type="button" class="profile-button" id="profileButton" aria-haspopup="dialog" aria-labelledby="activeProfileName profileActionLabel">
       <span class="profile-mark" aria-hidden="true"><span class="pixel-heart"></span></span>
       <span id="activeProfileName">PPA</span>
@@ -37,15 +38,15 @@
   <main class="stack" id="main">
     <div class="together-status line between" id="togetherStatus" hidden>
       <span class="line"><span class="pixel-heart" aria-hidden="true"></span><strong>Cùng nhịp</strong></span>
-      <span class="mono" id="togetherElapsed" role="timer">0 giây</span>
+      <span class="mono" id="togetherElapsed" role="timer">0 phút</span>
     </div>
     <div class="actor-pair">
     <section class="card actor-card" aria-labelledby="partnerHeading">
       <div class="actor-top">
-        <h2 class="actor-id card-title" id="partnerHeading"><span class="kicker pink">Đối phương</span> <span id="partnerName">TBV</span></h2>
+        <h2 class="actor-id card-title" id="partnerHeading"><span id="partnerName">TBV</span></h2>
         <div class="actor-readout">
           <p id="partnerActivity" class="actor-activity">Nghỉ ngơi</p>
-          <p id="partnerElapsed" class="actor-elapsed mono">—</p>
+          <div class="actor-time-line"><p id="partnerElapsed" class="actor-elapsed mono">0 phút</p><span id="partnerReward" class="activity-reward" hidden></span></div>
         </div>
       </div>
       <p id="speechBubble" class="speech-bubble" role="status" hidden></p>
@@ -59,13 +60,14 @@
 
     <section class="card actor-card" aria-labelledby="ownHeading">
       <div class="actor-top">
-        <h2 class="actor-id card-title" id="ownHeading"><span class="kicker green">Bạn</span> <span id="ownName">PPA</span></h2>
+        <h2 class="actor-id card-title" id="ownHeading"><span id="ownName">PPA</span></h2>
         <div class="actor-readout">
           <p id="ownActivity" class="actor-activity">Nghỉ ngơi</p>
-          <p id="ownElapsed" class="actor-elapsed mono">—</p>
+          <div class="actor-time-line"><p id="ownElapsed" class="actor-elapsed mono">0 phút</p><span id="ownReward" class="activity-reward" hidden></span></div>
         </div>
       </div>
-      <p id="timerStatus" class="small muted">Hoàn thành hoạt động để nhận nước tưới.</p>
+      <p id="timerStatus" class="sr-only"></p>
+      <p id="ownSpeechBubble" class="speech-bubble" role="status" hidden></p>
       <div class="actor-scene">
         <button class="actor-poke" id="ownPoke" type="button" aria-haspopup="dialog" aria-label="Đổi hoạt động của bạn">
           <canvas id="ownCanvas" width="160" height="160" aria-hidden="true"></canvas>
@@ -75,26 +77,32 @@
     </section>
     </div>
 
+    <section id="focusNote" class="focus-note" aria-label="Việc ưu tiên hôm nay">
+      <label class="focus-note-check"><input id="focusNoteCheck" type="checkbox" aria-label="Hoàn thành việc ưu tiên" disabled></label>
+      <button id="focusNoteText" class="focus-note-text" type="button" aria-haspopup="dialog" aria-controls="notesDrawer">Thêm một việc cho hôm nay…</button>
+      <button id="focusNoteCycle" class="focus-note-cycle" type="button" aria-label="Chuyển sang việc tiếp theo" disabled>↻</button>
+      <span id="focusNoteStatus" class="sr-only" role="status"></span>
+    </section>
+
     <nav class="quick-tools" aria-label="Công cụ hằng ngày">
       <button class="quick-tool" id="historyButton" type="button" aria-haspopup="dialog" aria-controls="historyDialog" aria-label="Lịch sử hoạt động 24h">
         <span>24h</span>
         <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 2h2V0h2v2h4V0h2v2h2v2h1v10h-1v1H2v-1H1V4h1zm1 4v7h10V6zm2 2h2v2H5zm4 0h2v2H9z"></path></svg>
       </button>
-      <button class="quick-tool" id="questOpen" type="button" aria-haspopup="dialog" aria-controls="questDrawer" aria-describedby="questCount">
-        <span>Quests</span>
+      <button class="quick-tool" id="questOpen" type="button" aria-haspopup="dialog" aria-controls="questDrawer">
+        <span class="tool-label">Quests <small id="questCount">0/8</small></span>
         <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 1h6v2h3v12H2V3h3zm-1 4v8h8V5h-1v1H5V5zm2 3h4v1H6zm0 2h4v1H6z"></path></svg>
       </button>
       <button class="quick-tool" id="notesOpen" type="button" aria-haspopup="dialog" aria-controls="notesDrawer">
-        <span>Notes</span>
+        <span class="tool-label">Notes <small id="notesCount">0/0</small></span>
         <svg viewBox="0 0 16 16" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M3 1h10v1h1v12h-1v1H3v-2H1v-2h2V9H1V7h2V5H1V3h2zm2 2v10h7V3zm2 2h3v1H7zm0 3h3v1H7z"></path></svg>
       </button>
-      <span id="questCount" class="sr-only">0/8</span>
     </nav>
 
     <section class="card" id="plant" aria-labelledby="plantHeading" tabindex="-1">
       <div class="plant-head line between">
-        <div><p class="kicker">Khu vườn chung</p><h2 class="card-title" id="plantHeading">Bonsai của hai bạn</h2></div>
-        <span class="plant-stage" id="plantStage">Mầm non</span>
+        <h2 class="card-title" id="plantHeading">Bonsai</h2>
+        <span class="plant-stage" id="plantStage"><span id="plantStageNumber">Giai đoạn 1</span><strong id="plantStageName">Mầm hạt</strong></span>
       </div>
       <div class="plant-scene">
         <button class="plant-poke" id="plantPoke" type="button" aria-haspopup="dialog" aria-label="Tưới bonsai" aria-controls="plantWaterDialog">
@@ -120,19 +128,14 @@
             7 ngày
           </span>
         </div>
+        <p class="water-stock" id="plantWaterBalance" aria-label="Số giọt chưa tưới của bạn"><strong id="plantAvailable" class="mono">0</strong><span class="drop" aria-hidden="true"></span></p>
       </div>
-      <div class="plant-tools line between">
-        <button class="plant-tool" id="plantGalleryOpen" type="button" aria-haspopup="dialog" aria-controls="plantGallery" aria-label="Xem các giai đoạn bonsai">Giai đoạn</button>
-        <p class="plant-water-balance">Bạn có sẵn <strong id="plantAvailable" class="mono">0 💧</strong></p>
-        <button class="plant-tool" id="plantHelp" type="button" aria-haspopup="dialog" aria-controls="rulesDialog" aria-label="Xem cách chăm bonsai và lịch sử tưới nước">?</button>
-      </div>
-      <p id="plantStatus" class="muted small" aria-live="polite">Hai bạn cùng chăm cây mỗi ngày.</p>
-      <div class="water-panel" role="group" aria-labelledby="plantPouredLabel">
-        <p class="plant-poured-label" id="plantPouredLabel">Đã tưới hôm nay</p>
+      <p id="plantStatus" class="sr-only" aria-live="polite"></p>
+      <div class="water-panel" role="group" aria-label="Nước cho bonsai hôm nay">
         <div class="water-values">
-          <span class="water-side"><span class="water-key" aria-hidden="true"></span><strong id="partnerWater" class="mono">TBV · 0 💧</strong></span>
+          <span class="water-side"><span class="drop" aria-hidden="true"></span><strong id="partnerWater" class="mono">TBV · 0</strong></span>
           <span class="water-total mono"><span class="drop" aria-hidden="true"></span> <strong id="waterTotal">0</strong>/<span id="waterTarget">—</span></span>
-          <span class="water-side own"><strong id="ownWater" class="mono">PPA · 0 💧</strong><span class="water-key" aria-hidden="true"></span></span>
+          <span class="water-side own"><strong id="ownWater" class="mono">PPA · 0</strong><span class="drop" aria-hidden="true"></span></span>
         </div>
         <div class="water-meter" aria-hidden="true">
           <span class="water-segment partner" id="waterPartnerBar"></span>
@@ -350,6 +353,6 @@
     </form>
   </footer>
 </dialog>
-<script type="module" src="./js/app.js?v=activity-plan-nine"></script>
+<script type="module" src="./js/app.js?v=daily-priority"></script>
 </body>
 </html>

@@ -195,6 +195,7 @@ dialog[open] { animation: arrive 170ms ease-out both; }
 .activity-button:hover { border-color: #8BB08B; }
 .activity-icon { width: 15px; text-align: center; font-size: 12px; flex: 0 0 auto; }
 .activity-label { min-width: 0; overflow-wrap: anywhere; }
+.activity-claim-mark { margin-inline-start: auto; }
 
 .history-dialog { overflow: hidden; }
 .history-dialog[open] { display: flex; flex-direction: column; gap: 7px; }
