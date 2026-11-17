@@ -1,5 +1,5 @@
-import { DAILY_QUESTS } from "./catalog.js?v=pocket-ios-1";
-import { FocusState } from "./state.js?v=pocket-ios-1";
+import { DAILY_QUESTS } from "./catalog.js?v=pocket-ios-2";
+import { FocusState } from "./state.js?v=pocket-ios-2";
 import { AudioEngine } from "./audio.js";
 
 const questRoot = new URL("../assets/quests/", import.meta.url);

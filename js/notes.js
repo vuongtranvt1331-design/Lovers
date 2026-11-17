@@ -1,6 +1,6 @@
-import { PocketDB } from "./db.js?v=pocket-ios-1";
+import { PocketDB } from "./db.js?v=pocket-ios-2";
 import { DAY_MS, GAME_TIME_ZONE, dateStart, offsetDay, today } from "./gameTime.js";
-import { createFocusNote } from "./focusNote.js?v=pocket-ios-1";
+import { createFocusNote } from "./focusNote.js?v=pocket-ios-2";
 
 const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const RESERVED_ROWS = 8;
@@ -195,14 +195,6 @@ export function createNotesDrawer(currentProfile, canAct) {
     entry.className = "notes-entry";
     text.className = "notes-text";
     text.textContent = note.text;
-    if (canEdit && snapshot.pinnedId === note.id) {
-      row.classList.add("is-pinned");
-      const pin = document.createElement("span");
-      pin.className = "notes-pin-mark";
-      pin.textContent = "◆";
-      pin.setAttribute("aria-label", "Đã ghim ưu tiên");
-      entry.append(pin);
-    }
     if (canEdit) {
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
@@ -236,7 +228,7 @@ export function createNotesDrawer(currentProfile, canAct) {
       handle.className = "notes-handle";
       handle.dataset.noteAction = "menu";
       handle.textContent = "⋯";
-      handle.setAttribute("aria-label", "Thứ tự và ghim " + note.text);
+      handle.setAttribute("aria-label", "Đổi thứ tự " + note.text);
       handle.setAttribute("aria-expanded", String(expandedId === note.id));
       handle.addEventListener("click", () => {
         if (performance.now() < suppressedClickUntil) return;
@@ -262,12 +254,10 @@ export function createNotesDrawer(currentProfile, canAct) {
       handle.setAttribute("aria-controls", menu.id);
       menu.hidden = expandedId !== note.id;
       menu.setAttribute("role", "group");
-      menu.setAttribute("aria-label", "Sắp xếp và ghim ghi chú");
+      menu.setAttribute("aria-label", "Sắp xếp ghi chú");
       const actions = [
         ["up", "↑ Lên", index === 0, () => moveTask(note.id, -1)],
         ["down", "↓ Xuống", index === snapshot.tasks.length - 1, () => moveTask(note.id, 1)],
-        ["pin", snapshot.pinnedId === note.id ? "Bỏ ghim" : "Ghim ưu tiên", note.done,
-          () => void save((profile, date) => PocketDB.notes.pin(profile, date, snapshot.pinnedId === note.id ? null : note.id))],
       ];
       for (const [action, label, unavailable, callback] of actions) {
         const button = document.createElement("button");

@@ -1,6 +1,6 @@
-import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=pocket-ios-1";
-import { CanvasRenderer } from "./canvasRenderer.js?v=pocket-ios-1";
-import { FocusState } from "./state.js?v=pocket-ios-1";
+import { ACTIVITY_GROUPS, ACTIVITY_TITLES } from "./catalog.js?v=pocket-ios-2";
+import { CanvasRenderer } from "./canvasRenderer.js?v=pocket-ios-2";
+import { FocusState } from "./state.js?v=pocket-ios-2";
 import { DAY_MS, dateStart, GAME_TIME_ZONE, offsetDay, today } from "./gameTime.js";
 
 export const Timeline = (() => {

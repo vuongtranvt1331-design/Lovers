@@ -1,4 +1,4 @@
-import { PocketDB } from "./db.js?v=pocket-ios-1";
+import { PocketDB } from "./db.js?v=pocket-ios-2";
 import { today } from "./gameTime.js";
 
 export function createFocusNote(currentProfile, canAct, openNotes) {
@@ -33,7 +33,7 @@ export function createFocusNote(currentProfile, canAct, openNotes) {
     ui.focusNoteCheck.disabled = !task || !writable();
     ui.focusNoteCheck.setAttribute("aria-label", task ? "Hoàn thành " + task.text : "Chưa có việc cần hoàn thành");
     ui.focusNoteCycle.disabled = unfinished().length < 2 || !writable();
-    ui.focusNoteCycle.setAttribute("aria-label", "Chọn và ghim việc chưa xong tiếp theo");
+    ui.focusNoteCycle.setAttribute("aria-label", "Chọn việc chưa xong tiếp theo");
     ui.focusNote.dataset.pinned = String(Boolean(task && task.id === snapshot.pinnedId));
     ui.focusNote.dataset.offline = String(!canAct());
     ui.focusNote.setAttribute("aria-busy", String(phase === "loading" || pending));

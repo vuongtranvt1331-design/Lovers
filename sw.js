@@ -6,7 +6,7 @@
  */
 'use strict';
 
-const VERSION = 'pocket-ios-1';
+const VERSION = 'pocket-ios-2';
 const SCOPE = new URL(self.registration.scope);
 const PREFIX = 'pocket-space:' + encodeURIComponent(SCOPE.pathname) + ':';
 const SHELL_CACHE = PREFIX + VERSION + ':shell';
