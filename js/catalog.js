@@ -42,6 +42,8 @@ export const DAILY_QUESTS = [
   { id: "drink_water", title: "Uống nước ấm", icon: "🍵", reward: 1 },
   { id: "clean_desk", title: "Dọn bàn sạch sẽ", icon: "✨", reward: 1 },
   { id: "fresh_air", title: "Ra ngoài hít thở", icon: "🌿", reward: 1, hint: "Ở ngoài trời ít nhất 5 phút." },
+  { id: "complete_5_notes", title: "Hoàn thành 5 ghi chú", icon: "☑", reward: 2, automatic: true, noteTarget: 5,
+    hint: "Tự nhận khi tích đủ 5 việc trong sổ hôm nay." },
   { id: "hug_5s", title: "Ôm nhau 5 giây", icon: "🤗", reward: 2, pair: true },
   { id: "tbv_kiss_ppa", title: "TBV thơm má PPA", icon: "💋", reward: 2, pair: true },
   { id: "ppa_kiss_tbv", title: "PPA thơm má TBV", icon: "💋", reward: 2, pair: true },

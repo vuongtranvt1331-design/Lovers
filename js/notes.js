@@ -1,6 +1,6 @@
-import { PocketDB } from "./db.js?v=pocket-ios-2";
+import { PocketDB } from "./db.js?v=pocket-ios-3";
 import { DAY_MS, GAME_TIME_ZONE, dateStart, offsetDay, today } from "./gameTime.js";
-import { createFocusNote } from "./focusNote.js?v=pocket-ios-2";
+import { createFocusNote } from "./focusNote.js?v=pocket-ios-3";
 
 const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const RESERVED_ROWS = 8;
@@ -79,9 +79,9 @@ export function createNotesDrawer(currentProfile, canAct) {
 
   function renderStatus() {
     let message = notice;
-    if (!message && !canAct()) message = "Mất kết nối. Bạn có thể xem ghi chú đã tải.";
+    if (!message && !canAct()) message = "Mất kết nối. Bạn có thể nhập trước; kết nối lại để lưu.";
     if (!message && phase === "error") message = "Chưa tải được ghi chú. Hãy mở lại sổ để thử.";
-    if (!message && (phase === "loading" || snapshot.fromCache)) message = "Đang tải ghi chú…";
+    if (!message && (phase === "loading" || snapshot.fromCache)) message = "Đang tải ghi chú… Bạn có thể nhập trước.";
     if (!message && pending) message = "Đang lưu…";
     if (!message && remainingByOwner[owner] > 0) {
       message = "Còn " + remainingByOwner[owner] + " việc cũ đang chờ chuyển. Xóa bớt việc hôm nay để dành chỗ.";
@@ -97,7 +97,9 @@ export function createNotesDrawer(currentProfile, canAct) {
   function renderControls() {
     const canWrite = writable();
     ui.compose.hidden = !editable();
-    ui.input.disabled = !canWrite;
+    // Draft entry must stay native and focusable while the server catches up.
+    // Only committed actions depend on connection/snapshot readiness.
+    ui.input.disabled = !editable();
     ui.add.disabled = !canWrite || pending;
     for (const control of ui.list.querySelectorAll("input, button")) {
       control.disabled = !canWrite || control.dataset.unavailable === "true";

@@ -538,6 +538,7 @@ body[data-together="true"] .actor-poke { border-color: #D9C3A0; }
 .quest-reward { color: #305D49; background: #DDF1E3; padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 800; }
 .quest-claim { width: 100%; min-height: var(--tap-target); padding: 4px 3px; font-size: 11px; }
 .quest-claim.is-complete { opacity: 1; color: #365C42; background: #E3EFE2; }
+.quest-claim.is-automatic:disabled { opacity: 1; cursor: default; color: #365C42; background: #EAF3E5; }
 .quest-burst {
   --quest-burst-bottom: max(16px, env(safe-area-inset-bottom));
   position: fixed;

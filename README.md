@@ -24,17 +24,19 @@ Khi có phiên bản mới, app hiện **Tải lại**. Hoàn tất phần đang
 
 - Chạm nhân vật của bạn để chọn **Hiện tại**, **+1h** hoặc **+2h**. Các mốc tương lai tính từ thời điểm mở một lịch mới, lưu cho từng hồ sơ và có thể sửa hoặc bỏ. Lịch đã lưu giữ nguyên giờ sau khi tải lại. Nếu ứng dụng đóng, lần mở có kết nối tiếp theo sẽ tính lại các phiên theo đúng giờ đã hẹn.
 - Nhận nước xong, hoạt động vẫn tiếp tục. Thời gian ngắt quãng cộng dồn trong ngày; mỗi hoạt động chỉ nhận nước một lần/ngày. Ngủ nhận 5 hoặc 10 giọt ở lần thức dậy đủ điều kiện đầu tiên.
-- Cây có **9 cấp**, mỗi cấp cần **10 ngày đủ nước**. Mốc khởi đầu lần lượt là **62, 72, 82, 92, 102, 112, 122, 132, 150** giọt. Cấp 1–8 tăng 1 giọt sau ngày đủ nước, tối đa 9 lần trong cấp. Cấp 9 giữ 150 giọt, bằng 85% mức tối đa 176 giọt của hai hồ sơ, làm tròn lên.
+- Cây có **9 cấp**, mỗi cấp cần **10 ngày đủ nước**. Mốc khởi đầu lần lượt là **62, 72, 82, 92, 102, 112, 122, 132, 153** giọt. Cấp 1–8 tăng 1 giọt sau ngày đủ nước, tối đa 9 lần trong cấp. Cấp 9 giữ 153 giọt, bằng 85% mức tối đa 180 giọt của hai hồ sơ. Mốc 150 của hồ sơ đã có được giữ đến hết ngày chuyển đổi.
 - Thiếu nước khi hết khiên làm mất tối đa 5 ngày tiến độ và giảm mục tiêu tương ứng. Ba ngày thiếu liên tiếp làm lùi một cấp. Ngày lên cấp có ánh sáng ấm phía sau cây.
 - **PPA** có “Đi chơi Thái Lan”. **TBV** có “Học tiếng Pháp”, đủ 40 phút nhận 8 giọt một lần/ngày, có thưởng học cùng nhau và dùng chung giới hạn học 20 giọt.
 
-Cập nhật **firestore.rules trước khi đưa mã mới lên Pages**, rồi tải lại trên cả hai thiết bị. Mục tiêu cũ còn đạt được giữ tới hết ngày nâng cấp; mốc cũ 186 giọt được điều chỉnh về 150. Nước đã có và nhật ký ngày cũ được giữ.
+Cập nhật **firestore.rules trước khi đưa mã mới lên Pages**, rồi tải lại trên cả hai thiết bị. Mục tiêu cũ còn đạt được giữ tới hết ngày nâng cấp; mốc cũ 186 giọt được điều chỉnh về mức hiện tại. Nước đã có và nhật ký ngày cũ được giữ.
 
 ## Giao diện hằng ngày
 
 - Hai thẻ luôn cạnh nhau: tên lớn ở bên trái, hoạt động bên phải; thời gian làm tròn xuống phút và huy hiệu nước nằm cùng dòng phía dưới. Dấu × là chưa nhận, dấu ✓ kèm số giọt là lượng thực nhận. Tin nhắn nhận và gửi xuất hiện trên thẻ tương ứng.
 - Dòng ngay dưới hai nhân vật nhắc việc hôm nay của hồ sơ đang chọn. Mặc định là việc chưa xong đầu danh sách; nút xoay chọn việc khác. Hoàn thành sẽ chuyển sang việc chưa xong tiếp theo.
 - Trong Notes, kéo nút ba chấm hoặc mở menu Lên/Xuống để đổi thứ tự. Menu chỉ có hai nút Lên và Xuống; nút Xóa vẫn nằm cạnh mỗi ghi chú. Thứ tự và số việc hoàn thành đồng bộ giữa các thiết bị. Nếu hôm nay đầy, việc dư được giữ chờ; sổ người còn lại vẫn chuyển bình thường.
+- Ô nhập Notes nhận chạm và cho gõ trước trong lúc đang tải hoặc mất kết nối; nút Thêm chỉ bật khi có thể lưu lên máy chủ. Chỉ thông báo thành công sau khi dữ liệu được xác nhận.
+- Quest **Hoàn thành 5 ghi chú** tự cộng **2 giọt chưa tưới** cho chủ sổ hôm nay, một lần/ngày. Tiến độ hiển thị 0/5–5/5, không có nút nhận thủ công. Bỏ tích, tích lại, tải lại hoặc mở hai tab không tạo thêm thưởng; ghi chú ngày khác không tính vào hôm nay.
 - Huy hiệu ngày ở đầu trang mở bộ sưu tập bonsai; nút ? cạnh đó mở hướng dẫn. Thanh nước chỉ hiển thị nước đã tưới: bên trái của đối phương là hồng pastel, bên phải của hồ sơ đang chọn là xanh biển. Bộ đếm nước chưa tưới của hồ sơ hiện tại nằm trong khung cây ở góc trên bên phải, đối xứng với huy hiệu ngày bên trái. Kho người còn lại không hiển thị.
 
 Bản cập nhật khôi phục chính xác lượt thưởng từ nhật ký cũ. Nếu dữ liệu ngày chuyển đổi thiếu, ngày đó được miễn phạt khi chưa đạt mục tiêu; tưới đủ vẫn được tiến độ bình thường. Các quy tắc chống giả giờ và tự tạo nước không thay đổi trong bản này.

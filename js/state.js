@@ -1,6 +1,6 @@
 import { BALANCE_VERSION, canSelectActivity, DAILY_QUESTS, DAILY_WATER_MAX, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP,
-  STAGE_PROGRESSION_DAYS, STAGE_TARGETS, WATER_ACTIVITY_CATEGORIES, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=pocket-ios-2';
-import { PocketDB } from './db.js?v=pocket-ios-2';
+  STAGE_PROGRESSION_DAYS, STAGE_TARGETS, WATER_ACTIVITY_CATEGORIES, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=pocket-ios-3';
+import { PocketDB } from './db.js?v=pocket-ios-3';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, offsetDay, timestamp, today } from './gameTime.js';
 
 export const FocusState = (() => {
@@ -17,6 +17,8 @@ export const FocusState = (() => {
   const MANUAL_WATERING_VERSION = 1;
   const REWARD_RECEIPT_VERSION = 1;
   const ACTIVITY_SCHEDULE_VERSION = 1;
+  const AUTO_QUEST_VERSION = 1;
+  const PREVIOUS_MAINTENANCE_TARGET = 150;
   const MAX_SETTLEMENT_EVENTS = 48;
   const SLEEP_TIERS = WATER_REWARDS.sleep.tiers;
   const SLEEP_TARGET_MS = SLEEP_TIERS.at(-1).minutes * MINUTE;
@@ -219,7 +221,8 @@ export const FocusState = (() => {
       ? migrating ? streakDays : bounded(raw?.stageGrowthDays, 0, STAGE_GROWTH_DAY_CAP) : 0;
     const legacyTargetDate = storedDate && Number.isSafeInteger(raw.targetDrops)
       && raw.targetDrops > 0 && raw.targetDrops <= DAILY_WATER_MAX
-      && (migrating || raw.legacyTargetDate === date) ? date : null;
+      && (migrating || raw.legacyTargetDate === date
+        || (currentStage === STAGE_TARGETS.length && raw.targetDrops === PREVIOUS_MAINTENANCE_TARGET)) ? date : null;
     const evaluatedDate = dateStart(raw?.lastEvaluationDate) !== null && raw.lastEvaluationDate <= date
       ? raw.lastEvaluationDate : null;
     const lastEvaluationDate = storedDate && !Object.hasOwn(raw, 'lastEvaluationDate')
@@ -246,6 +249,7 @@ export const FocusState = (() => {
       rewardReceiptVersion: Math.max(REWARD_RECEIPT_VERSION, bounded(raw?.rewardReceiptVersion, REWARD_RECEIPT_VERSION)),
       balanceVersion: Math.max(BALANCE_VERSION, bounded(raw?.balanceVersion, BALANCE_VERSION)),
       activityScheduleVersion: Math.max(ACTIVITY_SCHEDULE_VERSION, bounded(raw?.activityScheduleVersion, ACTIVITY_SCHEDULE_VERSION)),
+      autoQuestVersion: Math.max(AUTO_QUEST_VERSION, bounded(raw?.autoQuestVersion, AUTO_QUEST_VERSION)),
       legacyTargetDate,
       migrationGraceDate: dateStart(raw?.migrationGraceDate) !== null && raw.migrationGraceDate <= date
         ? raw.migrationGraceDate : null,
@@ -654,7 +658,7 @@ export const FocusState = (() => {
     }
   }
 
-  function apply(raw, now, operation, legacyLogs, guard) {
+  function apply(raw, now, operation, legacyLogs, guard, proof) {
     const draft = normalize(raw, now, legacyLogs);
     const logs = [];
     const day = today(now);
@@ -676,7 +680,7 @@ export const FocusState = (() => {
     if (settle(draft, now, logs)) return { draft, logs, result: false, pendingSettlement: true };
     // Finish pending legacy sessions under their original watering policy before upgrading.
     draft.plant.wateringVersion = Math.max(draft.plant.wateringVersion, MANUAL_WATERING_VERSION);
-    const result = guard && !guard(draft) ? false : operation ? operation(draft, logs) : undefined;
+    const result = guard && !guard(draft) ? false : operation ? operation(draft, logs, proof) : undefined;
     return { draft, logs, result };
   }
 
@@ -701,7 +705,7 @@ export const FocusState = (() => {
     return changed;
   }
 
-  function write(now, operation, { actor = 'system', action = 'refresh', guard } = {}) {
+  function write(now, operation, { actor = 'system', action = 'refresh', guard, noteQuest } = {}) {
     const accountGeneration = generation;
     return enqueue(async () => {
       if (accountGeneration !== generation) return false;
@@ -710,9 +714,9 @@ export const FocusState = (() => {
       try {
         do {
           change = await PocketDB.mutate(
-            (raw, legacyLogs) => apply(raw, instant, operation, legacyLogs, guard),
+            (raw, legacyLogs, proof) => apply(raw, instant, operation, legacyLogs, guard, proof),
             requiresLegacyLogs,
-            { actor, action, now: instant },
+            { actor, action, now: instant, ...(noteQuest ? { noteQuest } : {}) },
           );
         } while (change?.pendingSettlement && accountGeneration === generation);
         if (!change) throw new Error('No server confirmation for Pocket Space change');
@@ -837,7 +841,7 @@ export const FocusState = (() => {
     completeQuest(value, quest, now = Date.now()) {
       const key = userKey(value);
       const info = QUESTS.get(quest);
-      if (!key || !info || info.pair) return Promise.resolve(false);
+      if (!key || !info || info.pair || info.automatic) return Promise.resolve(false);
       const instant = time(now);
       const day = today(instant);
       return write(instant, draft => {
@@ -849,6 +853,25 @@ export const FocusState = (() => {
         draft.users[key].waterDropsAvailable += info.reward;
         return true;
       }, { actor: key, action: 'completeQuest', guard: () => true });
+    },
+
+    completeNotesQuest(value, date, now = Date.now()) {
+      const key = userKey(value);
+      const info = QUESTS.get('complete_5_notes');
+      const instant = time(now);
+      const day = date ?? today(instant);
+      if (!key || !info?.automatic || day !== today(instant)) return Promise.resolve(false);
+      return write(instant, (draft, logs, proof) => {
+        if (draft.plant.date !== day || proof?.owner !== key || proof.date !== day
+          || proof.archived !== false || !Number.isSafeInteger(proof.completedCount)
+          || proof.completedCount < info.noteTarget) return false;
+        const claims = draft.plant.dailyQuests[day] ??= {};
+        const claim = info.id + '_' + key;
+        if (claims[claim]) return false;
+        claims[claim] = true;
+        draft.users[key].waterDropsAvailable += info.reward;
+        return true;
+      }, { actor: key, action: 'completeNotesQuest', noteQuest: { owner: key, date: day } });
     },
 
     requestQuest(value, quest, now = Date.now()) {

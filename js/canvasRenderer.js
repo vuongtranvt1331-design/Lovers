@@ -1,4 +1,4 @@
-import { spriteURL } from "./catalog.js?v=pocket-ios-2";
+import { spriteURL } from "./catalog.js?v=pocket-ios-3";
 
 export const CanvasRenderer = (() => {
   const BACKGROUND = '#f4f8f3';

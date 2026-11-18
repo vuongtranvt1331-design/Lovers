@@ -119,3 +119,118 @@ async function main() {
   console.log('PASS carried source priority preserves an existing explicit priority today');
 }
 test('history cache, note capacity, ordering and priority persist correctly', main);
+
+async function noteRewardFixture() {
+  const app = path.resolve(__dirname, '../js');
+  const time = await import(pathToFileURL(path.join(app, 'gameTime.js')));
+  const date = '2026-11-18', now = time.dateStart(date) + 12 * 3600000;
+  const users = Object.fromEntries(['ppa', 'tbv'].map(id => [id, { id, currentActivity: 'home_idle',
+    waterDropsToday: 0, waterDropsAvailable: 0 }]));
+  const store = new Map([['room', { users, messages: [], revision: 1, historyIndex: {}, plant: {
+    date, dailyQuests: { [date]: {} }, currentStage: 1, streakDays: 0, consecutiveMissedDays: 0,
+    shieldAvailable: false, lastEvaluationDate: null, targetDrops: 62,
+  } }]]);
+  const versions = new Map(), attempts = [], config = {};
+  const env = { ...time, today: (epoch = now) => time.today(epoch), structuredClone, console, setTimeout, clearTimeout,
+    navigator: { onLine: true }, addEventListener() {} };
+  const source = (await fs.readFile(path.join(app, 'db.js'), 'utf8'))
+    .replace(/^import[^\n]+\n/, '').replace(/export /g, '');
+  vm.createContext(env);
+  vm.runInContext(source + '\ncontext=async()=>globalThis.client;serverReady=true;globalThis.api=PocketDB;', env);
+  const put = (ref, value) => { store.set(ref, structuredClone(value)); versions.set(ref, (versions.get(ref) ?? 0) + 1); };
+  env.client = { db: {}, refs: { room: 'room', users: { ppa: 'user/ppa', tbv: 'user/tbv' },
+    logs: 'logs', interactions: 'events', noteDays: 'notes' }, fs: {
+    doc: (collection, id) => collection + '/' + id, serverTimestamp: () => 'server-time',
+    Timestamp: { fromMillis: millis => ({ millis }) },
+    runTransaction: async (_db, apply) => {
+      for (let retry = 0; retry < 5; retry++) {
+        const reads = new Map(), writes = [], order = [];
+        const result = await apply({
+          get: async ref => {
+            assert.equal(writes.length, 0, 'every transaction read must precede every write');
+            reads.set(ref, versions.get(ref) ?? 0); order.push(['read', ref]);
+            return { data: () => structuredClone(store.get(ref)) };
+          },
+          set: (ref, data) => { writes.push([ref, structuredClone(data)]); order.push(['write', ref]); },
+        });
+        attempts.push(order);
+        await config.beforeCommit?.({ reads, writes, put, store });
+        if ([...reads].some(([ref, version]) => (versions.get(ref) ?? 0) !== version)) continue;
+        for (const [ref, data] of writes) put(ref, data);
+        return result;
+      }
+      throw new Error('Transaction retry limit');
+    },
+  } };
+  const note = (owner = 'ppa', noteDate = date, doneIds = ['a', 'b', 'c', 'd', 'e']) => ({
+    owner, date: noteDate, pendingDay: noteDate,
+    tasks: Object.fromEntries(['a', 'b', 'c', 'd', 'e'].map(id => [id, { text: id }])), doneIds,
+  });
+  const noChange = raw => ({ draft: structuredClone(raw), logs: [], result: false });
+  const claim = (raw, _logs, proof) => {
+    const change = noChange(raw), { draft } = change;
+    const key = 'complete_5_notes_ppa';
+    if (proof?.owner === 'ppa' && proof.date === date && proof.archived === false
+      && proof.completedCount >= 5 && !draft.plant.dailyQuests[date][key]) {
+      draft.plant.dailyQuests[date][key] = now;
+      draft.users.ppa.waterDropsAvailable += 2;
+      change.result = true;
+    }
+    return change;
+  };
+  const options = { actor: 'ppa', now, noteQuest: { owner: 'ppa', date } };
+  return { api: env.api, store, put, attempts, config, date, now, time, note, noChange, claim, options };
+}
+
+test('note quest proof reads the exact owner/day and counts only distinct existing completed IDs', async () => {
+  const f = await noteRewardFixture();
+  let proof;
+  const inspect = (raw, _logs, value) => { proof = value; return f.noChange(raw); };
+  await f.api.mutate(inspect, () => false, { actor: 'ppa', now: f.now });
+  assert.equal(proof, undefined, 'existing calls receive no unrequested proof');
+  assert.equal(f.attempts.at(-1).length, 1, 'old API does not read a Notes document');
+  f.put('notes/ppa_' + f.date, f.note('ppa', f.date, ['a', 'a', 'b', 'c', 'd', 'missing', 7]));
+  await f.api.mutate(inspect, () => false, f.options);
+  assert.deepEqual(JSON.parse(JSON.stringify(proof)), { owner: 'ppa', date: f.date, completedCount: 4, archived: false });
+  assert.equal(f.attempts.at(-1)[1][1], 'notes/ppa_' + f.date);
+  f.put('notes/ppa_' + f.date, { ...f.note(), archivedTo: f.time.nextDay(f.date) });
+  await f.api.mutate(inspect, () => false, f.options);
+  assert.equal(proof.completedCount, 5); assert.equal(proof.archived, true);
+  f.put('notes/ppa_' + f.date, f.note('tbv'));
+  await f.api.mutate(inspect, () => false, f.options);
+  assert.equal(proof.completedCount, 0); assert.equal(proof.archived, true);
+  f.store.delete('notes/ppa_' + f.date);
+  await f.api.mutate(inspect, () => false, { ...f.options, noteQuest: { ...f.options.noteQuest, completedCount: 999 } });
+  assert.equal(proof.completedCount, 0, 'caller fields cannot fabricate the server-read count');
+  await assert.rejects(f.api.mutate(inspect, () => false, { ...f.options, noteQuest: { owner: 'other', date: f.date } }), { code: 'invalid-argument' });
+  await assert.rejects(f.api.mutate(inspect, () => false, { ...f.options, noteQuest: { owner: 'ppa', date: '2026-02-30' } }), { code: 'invalid-argument' });
+});
+
+test('two concurrent note reward transactions read proof before writing and award once', async () => {
+  const f = await noteRewardFixture();
+  f.put('notes/ppa_' + f.date, f.note());
+  const results = await Promise.all([f.api.mutate(f.claim, () => false, f.options), f.api.mutate(f.claim, () => false, f.options)]);
+  assert.equal(results.filter(change => change.result).length, 1);
+  assert.equal(f.store.get('room').users.ppa.waterDropsAvailable, 2);
+  assert.equal(Object.keys(f.store.get('room').plant.dailyQuests[f.date]).length, 1);
+  assert.ok(f.attempts.length >= 3, 'competing room write causes a proof-and-room reread');
+  for (const attempt of f.attempts) {
+    const proofRead = attempt.findIndex(([kind, ref]) => kind === 'read' && ref === 'notes/ppa_' + f.date);
+    const write = attempt.findIndex(([kind]) => kind === 'write');
+    assert.ok(proofRead >= 0 && (write < 0 || proofRead < write));
+  }
+});
+
+test('a concurrent uncheck invalidates stale five-note proof before reward commit', async () => {
+  const f = await noteRewardFixture();
+  f.put('notes/ppa_' + f.date, f.note());
+  let changed = false;
+  f.config.beforeCommit = ({ writes, put }) => {
+    if (!changed && writes.length) { changed = true; put('notes/ppa_' + f.date, f.note('ppa', f.date, ['a', 'b', 'c', 'd'])); }
+  };
+  const result = await f.api.mutate(f.claim, () => false, f.options);
+  assert.equal(result.result, false);
+  assert.equal(f.store.get('room').users.ppa.waterDropsAvailable, 0);
+  assert.equal(Object.keys(f.store.get('room').plant.dailyQuests[f.date]).length, 0);
+  assert.equal(f.attempts.length, 2, 'Notes change retries the whole transaction and recomputes proof');
+});

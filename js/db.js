@@ -221,6 +221,12 @@ async function mutate(transform, needsLegacyLogs, options = {}) {
   requireOnline();
   const actor = options.actor ?? 'system';
   if (actor !== 'system' && !roles.includes(actor)) throw dbError('invalid-argument', 'Hồ sơ không hợp lệ.');
+  let noteQuest;
+  if (options.noteQuest != null) {
+    const { owner, date } = options.noteQuest;
+    noteDayId(owner, date);
+    noteQuest = { owner, date };
+  }
   let legacyHistory;
   try {
     for (let migrationAttempt = 0; migrationAttempt < 5; migrationAttempt++) {
@@ -245,7 +251,17 @@ async function mutate(transform, needsLegacyLogs, options = {}) {
         || legacyHistory.date !== legacyDate)) {
         throw Object.assign(dbError('legacy-history-required', 'Đang đồng bộ lịch sử cũ.'), { date: legacyDate });
       }
-      const change = transform(raw, needsHistory ? legacyHistory.logs : []);
+      let proof;
+      if (noteQuest) {
+        const note = (await transaction.get(fs.doc(refs.noteDays, noteDayId(noteQuest.owner, noteQuest.date)))).data();
+        const matches = note?.owner === noteQuest.owner && note?.date === noteQuest.date;
+        const tasks = matches && note.tasks && typeof note.tasks === 'object' && !Array.isArray(note.tasks) ? note.tasks : {};
+        const doneIds = matches && Array.isArray(note.doneIds) ? note.doneIds : [];
+        proof = { ...noteQuest,
+          completedCount: new Set(doneIds.filter(id => typeof id === 'string' && Object.hasOwn(tasks, id))).size,
+          archived: Boolean(note?.archivedTo) || noteQuest.date < today() || Boolean(note && !matches) };
+      }
+      const change = transform(raw, needsHistory ? legacyHistory.logs : [], proof);
       const { draft, logs } = change;
       if (!needsUsers && !logs.length && equal(draft.users, raw.users)
         && equal(draft.plant, raw.plant) && equal(draft.messages, raw.messages)) {
