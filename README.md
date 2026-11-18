@@ -33,7 +33,7 @@ Cập nhật **firestore.rules trước khi đưa mã mới lên Pages**, rồi 
 ## Giao diện hằng ngày
 
 - Hai thẻ luôn cạnh nhau: tên lớn ở bên trái, hoạt động bên phải; thời gian làm tròn xuống phút và huy hiệu nước nằm cùng dòng phía dưới. Dấu × là chưa nhận, dấu ✓ kèm số giọt là lượng thực nhận. Tin nhắn nhận và gửi xuất hiện trên thẻ tương ứng.
-- Dòng ngay dưới hai nhân vật nhắc việc hôm nay của hồ sơ đang chọn. Mặc định là việc chưa xong đầu danh sách; nút xoay chọn việc khác. Hoàn thành sẽ chuyển sang việc chưa xong tiếp theo.
+- Khung ngay dưới hai nhân vật hiển thị tối đa 3 việc chưa xong trong sổ hôm nay của hồ sơ đang chọn. Mỗi dòng có ô hoàn thành riêng; tích xong sẽ tự bổ sung việc tiếp theo. Nếu còn hơn 3 việc, nút xoay chuyển dần sang các việc khác; thứ tự vẫn lấy từ Notes.
 - Trong Notes, kéo nút ba chấm hoặc mở menu Lên/Xuống để đổi thứ tự. Menu chỉ có hai nút Lên và Xuống; nút Xóa vẫn nằm cạnh mỗi ghi chú. Thứ tự và số việc hoàn thành đồng bộ giữa các thiết bị. Nếu hôm nay đầy, việc dư được giữ chờ; sổ người còn lại vẫn chuyển bình thường.
 - Ô nhập Notes nhận chạm và cho gõ trước trong lúc đang tải hoặc mất kết nối; nút Thêm chỉ bật khi có thể lưu lên máy chủ. Chỉ thông báo thành công sau khi dữ liệu được xác nhận.
 - Quest **Hoàn thành 5 ghi chú** tự cộng **2 giọt chưa tưới** cho chủ sổ hôm nay, một lần/ngày. Tiến độ hiển thị 0/5–5/5, không có nút nhận thủ công. Bỏ tích, tích lại, tải lại hoặc mở hai tab không tạo thêm thưởng; ghi chú ngày khác không tính vào hôm nay.

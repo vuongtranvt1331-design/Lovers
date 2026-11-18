@@ -160,8 +160,9 @@ label.notes-entry { cursor: pointer; }
 .notes-entry input[aria-disabled="true"], .notes-delete[aria-disabled="true"] { opacity: .55; cursor: progress; }
 
 #focusNote {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--tap-target);
+  align-items: stretch;
   min-width: 0;
   min-height: var(--tap-target);
   padding-inline: 3px;
@@ -170,13 +171,16 @@ label.notes-entry { cursor: pointer; }
   border: 1px solid var(--edge);
   border-radius: 10px;
 }
+.focus-note-list { min-width: 0; }
+.focus-note-row { display: flex; align-items: center; min-width: 0; min-height: var(--tap-target); }
+.focus-note-row:not([hidden]) + .focus-note-row:not([hidden]) { border-top: 1px solid #D5E2CF; }
 .focus-note-check { flex: 0 0 var(--tap-target); display: grid; place-items: center; width: var(--tap-target); height: var(--tap-target); cursor: pointer; }
-#focusNoteCheck { width: 18px; height: 18px; margin: 0; accent-color: #3D704B; cursor: pointer; }
-#focusNoteCheck:disabled { cursor: default; }
-#focusNoteText, #focusNoteCycle { min-height: var(--tap-target); color: inherit; background: transparent; border: 0; font-size: 12px; }
-#focusNoteText { flex: 1; min-width: 0; padding: 4px 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.focus-note-check input { width: 18px; height: 18px; margin: 0; accent-color: #3D704B; cursor: pointer; }
+.focus-note-check input:disabled { cursor: default; }
+.focus-note-text, #focusNoteCycle { min-height: var(--tap-target); color: inherit; background: transparent; border: 0; font-size: 12px; }
+.focus-note-text { flex: 1; min-width: 0; padding: 4px 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
 #focusNoteCycle { flex: 0 0 var(--tap-target); width: var(--tap-target); padding: 0; font-size: 19px; }
-#focusNoteText:hover, #focusNoteCycle:hover:not(:disabled) { background: #E4EFDC; border-radius: 6px; }
+.focus-note-text:hover, #focusNoteCycle:hover:not(:disabled) { background: #E4EFDC; border-radius: 6px; }
 #focusNote[data-pinned="true"] { border-color: #B8AF7D; }
 #focusNote[data-offline="true"] { color: var(--muted); }
 

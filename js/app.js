@@ -2,14 +2,14 @@ import {
   ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS,
   STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO, STAGE_PROGRESSION_DAYS,
   DAILY_WATER_MAX_BY_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
-} from "./catalog.js?v=pocket-ios-3";
+} from "./catalog.js?v=pocket-ios-4";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=pocket-ios-3";
-import { FocusState } from "./state.js?v=pocket-ios-3";
-import { Timeline } from "./timeline.js?v=pocket-ios-3";
-import { createQuestDrawer } from "./quests.js?v=pocket-ios-3";
-import { createNotesDrawer } from "./notes.js?v=pocket-ios-3";
-import { PocketDB } from "./db.js?v=pocket-ios-3";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=pocket-ios-4";
+import { FocusState } from "./state.js?v=pocket-ios-4";
+import { Timeline } from "./timeline.js?v=pocket-ios-4";
+import { createQuestDrawer } from "./quests.js?v=pocket-ios-4";
+import { createNotesDrawer } from "./notes.js?v=pocket-ios-4";
+import { PocketDB } from "./db.js?v=pocket-ios-4";
 import { offsetDay } from "./gameTime.js";
 
 const FocusUI = (() => {
