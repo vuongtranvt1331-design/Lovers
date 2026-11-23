@@ -1,7 +1,7 @@
-import { DAILY_QUESTS } from "./catalog.js?v=pocket-ios-4";
-import { FocusState } from "./state.js?v=pocket-ios-4";
+import { DAILY_QUESTS } from "./catalog.js?v=pocket-ios-5";
+import { FocusState } from "./state.js?v=pocket-ios-5";
 import { AudioEngine } from "./audio.js";
-import { PocketDB } from "./db.js?v=pocket-ios-4";
+import { PocketDB } from "./db.js?v=pocket-ios-5";
 
 const questRoot = new URL("../assets/quests/", import.meta.url);
 

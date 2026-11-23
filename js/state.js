@@ -1,6 +1,6 @@
 import { BALANCE_VERSION, canSelectActivity, DAILY_QUESTS, DAILY_WATER_MAX, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP,
-  STAGE_PROGRESSION_DAYS, STAGE_TARGETS, WATER_ACTIVITY_CATEGORIES, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=pocket-ios-4';
-import { PocketDB } from './db.js?v=pocket-ios-4';
+  STAGE_PROGRESSION_DAYS, STAGE_TARGETS, WATER_ACTIVITY_CATEGORIES, WATER_ACTIVITY_MINUTES, WATER_REWARDS } from './catalog.js?v=pocket-ios-5';
+import { PocketDB } from './db.js?v=pocket-ios-5';
 import { DAY_MS, MINUTE_MS as MINUTE, dateStart, nextDay, offsetDay, timestamp, today } from './gameTime.js';
 
 export const FocusState = (() => {
@@ -18,7 +18,8 @@ export const FocusState = (() => {
   const REWARD_RECEIPT_VERSION = 1;
   const ACTIVITY_SCHEDULE_VERSION = 1;
   const AUTO_QUEST_VERSION = 1;
-  const PREVIOUS_MAINTENANCE_TARGET = 150;
+  const ACTIVITY_REWARD_RULES_VERSION = 1;
+  const PREVIOUS_MAINTENANCE_TARGETS = [150, 153];
   const MAX_SETTLEMENT_EVENTS = 48;
   const SLEEP_TIERS = WATER_REWARDS.sleep.tiers;
   const SLEEP_TARGET_MS = SLEEP_TIERS.at(-1).minutes * MINUTE;
@@ -44,7 +45,9 @@ export const FocusState = (() => {
     Number.isFinite(value) ? Math.min(max, Math.max(0, Math.trunc(value))) : fallback;
   const ruleFor = activity => activityRules.get(activity);
   const stageTarget = (stage, growthDays) => STAGE_TARGETS[stage - 1] + STAGE_DAILY_INCREASES[stage - 1] * growthDays;
-  const carryLimit = rule => Math.max(rule.minutes, rule.previousMinutes, rule.legacyMinutes) * MINUTE - 1;
+  const carryLimit = rule => Math.max(rule.minutes, rule.previousMinutes, rule.legacyMinutes ?? 0) * MINUTE - 1;
+  const targetReward = (rule, plant) => rule.targetShare == null
+    ? rule.reward : Math.ceil(plant.targetDrops * rule.targetShare);
   const legacyReward = activity => activity === 'out_running' ? 15 : 10;
   const userKey = value => {
     const key = typeof value === 'string' ? value.toLowerCase() : '';
@@ -76,7 +79,7 @@ export const FocusState = (() => {
     const saved = raw.rewardTargetMs;
     if (Number.isSafeInteger(saved) && [rule.minutes, rule.previousMinutes, rule.legacyMinutes].includes(saved / MINUTE)) return saved;
     // Existing sessions keep the deadline persisted before targets increased.
-    return (Object.hasOwn(raw, 'rewardProgress') ? rule.previousMinutes : rule.legacyMinutes) * MINUTE;
+    return ((Object.hasOwn(raw, 'rewardProgress') ? rule.previousMinutes : rule.legacyMinutes) ?? rule.minutes) * MINUTE;
   }
 
   function readSchedule(key, raw) {
@@ -115,7 +118,7 @@ export const FocusState = (() => {
     return today(shortened) === today(start) ? shortened : full;
   }
 
-  function readUser(key, raw, day) {
+  function readUser(key, raw, day, rewardMigrationDay) {
     const savedStart = timestamp(raw?.startTime);
     // Pre-upgrade saves did not distinguish a selected activity from the default clock.
     const explicitSession = raw?.explicitSession === true && savedStart !== null
@@ -128,12 +131,16 @@ export const FocusState = (() => {
     const historyLoggedThrough = historyStart === null ? null
       : Math.max(historyStart, timestamp(raw?.historyLoggedThrough) ?? historyStart);
     const rewardProgress = raw?.waterDate === day ? readRewardProgress(key, raw.rewardProgress) : {};
-    const rewardTargetMs = readRewardTarget(ruleFor(currentActivity), raw);
     const hasRewardCursor = raw && Object.hasOwn(raw, 'nextRewardAt');
     const rule = ruleFor(currentActivity);
-    const rewardBlockStartedAt = explicitSession ? timestamp(raw.rewardBlockStartedAt) ?? startTime : null;
-    const nextRewardAt = rule?.minutes ? hasRewardCursor ? timestamp(raw.nextRewardAt)
-      : timestamp(raw.plannedEndTime) ?? activityDeadline(currentActivity, startTime, rewardTargetMs, rewardProgress, day) : null;
+    const newlyRewarded = rewardMigrationDay && rule?.minutes && raw.rewardTargetMs == null
+      && (rule.legacyMinutes == null || ['out_going_to_school', 'work_meeting'].includes(currentActivity));
+    const rewardTargetMs = newlyRewarded ? rule.minutes * MINUTE : readRewardTarget(rule, raw);
+    const rewardBlockStartedAt = newlyRewarded ? Math.max(startTime, dateStart(rewardMigrationDay))
+      : explicitSession ? timestamp(raw.rewardBlockStartedAt) ?? startTime : null;
+    const nextRewardAt = !rule?.minutes ? null : newlyRewarded
+      ? rewardBlockStartedAt + rewardTargetMs : hasRewardCursor ? timestamp(raw.nextRewardAt)
+        : timestamp(raw.plannedEndTime) ?? activityDeadline(currentActivity, startTime, rewardTargetMs, rewardProgress, day);
     const activitySchedule = readSchedule(key, raw);
     const scheduleAnchorAt = activitySchedule.length ? timestamp(raw.scheduleAnchorAt) : null;
     const pairedFocusMs = explicitSession ? bounded(raw.pairedFocusMs, 0, rewardTargetMs ?? 0) : 0;
@@ -222,7 +229,7 @@ export const FocusState = (() => {
     const legacyTargetDate = storedDate && Number.isSafeInteger(raw.targetDrops)
       && raw.targetDrops > 0 && raw.targetDrops <= DAILY_WATER_MAX
       && (migrating || raw.legacyTargetDate === date
-        || (currentStage === STAGE_TARGETS.length && raw.targetDrops === PREVIOUS_MAINTENANCE_TARGET)) ? date : null;
+        || (currentStage === STAGE_TARGETS.length && PREVIOUS_MAINTENANCE_TARGETS.includes(raw.targetDrops))) ? date : null;
     const evaluatedDate = dateStart(raw?.lastEvaluationDate) !== null && raw.lastEvaluationDate <= date
       ? raw.lastEvaluationDate : null;
     const lastEvaluationDate = storedDate && !Object.hasOwn(raw, 'lastEvaluationDate')
@@ -250,6 +257,8 @@ export const FocusState = (() => {
       balanceVersion: Math.max(BALANCE_VERSION, bounded(raw?.balanceVersion, BALANCE_VERSION)),
       activityScheduleVersion: Math.max(ACTIVITY_SCHEDULE_VERSION, bounded(raw?.activityScheduleVersion, ACTIVITY_SCHEDULE_VERSION)),
       autoQuestVersion: Math.max(AUTO_QUEST_VERSION, bounded(raw?.autoQuestVersion, AUTO_QUEST_VERSION)),
+      activityRewardRulesVersion: Math.max(ACTIVITY_REWARD_RULES_VERSION,
+        bounded(raw?.activityRewardRulesVersion, ACTIVITY_REWARD_RULES_VERSION)),
       legacyTargetDate,
       migrationGraceDate: dateStart(raw?.migrationGraceDate) !== null && raw.migrationGraceDate <= date
         ? raw.migrationGraceDate : null,
@@ -330,7 +339,8 @@ export const FocusState = (() => {
 
   function normalize(raw, now, legacyLogs = []) {
     const plant = readPlant(raw?.plant, now);
-    const users = Object.fromEntries(USERS.map(key => [key, readUser(key, raw?.users?.[key], plant.date)]));
+    const rewardMigrationDay = raw?.plant && !raw.plant.activityRewardRulesVersion ? today(now) : null;
+    const users = Object.fromEntries(USERS.map(key => [key, readUser(key, raw?.users?.[key], plant.date, rewardMigrationDay)]));
     const recoverWater = raw?.plant && !Object.hasOwn(raw.plant, 'waterHistoryByDate');
     const recoverCategories = raw?.plant && !Object.hasOwn(raw.plant, 'rewardHistoryByDate');
     for (const entry of legacyLogs) {
@@ -357,6 +367,11 @@ export const FocusState = (() => {
       const user = users[key];
       user.waterDropsToday = Math.max(user.waterDropsToday, recorded);
       migrateActivityRewards(user, raw?.users?.[key], plant, legacyLogs);
+      const previousMealReward = creditedOn(plant, user, 'meal', plant.date);
+      if (previousMealReward > 0) {
+        user.activityRewardClaims.home_eating = true;
+        user.activityRewardAmounts.home_eating ||= previousMealReward;
+      }
       if (user.activityRewardClaims[user.currentActivity]) user.nextRewardAt = null;
       const paidSleep = creditedOn(plant, user, 'sleep', plant.date);
       if (paidSleep > 0) {
@@ -616,7 +631,7 @@ export const FocusState = (() => {
           const carry = carriedIntoDeadline(user);
           const pairedMs = user.pairedFocusMs + (carry?.pairedMs ?? 0);
           const bonus = rule.pairGroup && pairedMs * 5 >= user.rewardTargetMs * 4;
-          const amount = bonus ? Math.ceil(rule.reward * 1.2) : rule.reward;
+          const amount = bonus ? Math.ceil(rule.reward * 1.2) : targetReward(rule, draft.plant);
           award(draft, user, rule, user.rewardBlockStartedAt, eventAt, amount, logs);
           user.activityRewardClaims[user.currentActivity] = true;
           delete user.rewardProgress[user.currentActivity];
@@ -790,7 +805,7 @@ export const FocusState = (() => {
     const day = today(instant);
     const claimed = user.waterDate === day && user.activityRewardClaims[activity] === true;
     const amount = user.waterDate === day ? user.activityRewardAmounts[activity] ?? 0 : 0;
-    let expected = rule.reward;
+    let expected = targetReward(rule, state.plant);
     if (rule.wakeOnly) {
       const carry = user.waterDate === day ? user.rewardProgress[activity]?.elapsedMs ?? 0 : 0;
       const elapsed = user.currentActivity === activity ? Math.max(0, instant - user.startTime) : 0;
@@ -1024,7 +1039,7 @@ export const FocusState = (() => {
       return {
         category: rule?.category ?? null,
         minutes: user?.rewardTargetMs != null ? user.rewardTargetMs / MINUTE : null,
-        reward: rule?.reward ?? null,
+        reward: rule ? targetReward(rule, model.plant) : null,
         cap: rule?.cap ?? null,
         creditedToday: rule ? creditedOn(model.plant, user, rule.category, day) : 0,
         claimedToday,

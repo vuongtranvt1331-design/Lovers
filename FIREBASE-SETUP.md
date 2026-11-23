@@ -55,7 +55,8 @@ Mở http://127.0.0.1:8765/?emulator=1. Có thể chạy kiểm thử logic vớ
 - pocket_space/live_interactions/events lưu tương tác. Quest đôi được xác nhận và cộng thưởng trong cùng một giao dịch.
 - pocket_space/activity_history/logs lưu nhật ký theo dateStr. Phiên qua ngày được tách theo 00:00 giờ Việt Nam.
 - pocket_space/notes_state/days lưu danh sách ghi chú theo hồ sơ và ngày. Việc còn dở được chuyển vào ngày hiện tại khi mở lại sổ. Danh sách của ngày trước giữ kết quả đã chốt.
-- Quest complete_5_notes kiểm tra tối thiểu 5 ID đã xong còn tồn tại trong sổ hôm nay, đọc cùng giao dịch với plant_state. Mỗi chủ sổ nhận 2 giọt vào kho riêng một lần/ngày; không tự tưới. Quy tắc mốc cấp 9 là 153 từ ngày kế tiếp, giữ 150 đến hết ngày của hồ sơ cũ.
+- Quest complete_5_notes kiểm tra tối thiểu 5 ID đã xong còn tồn tại trong sổ hôm nay, đọc cùng giao dịch với plant_state. Mỗi chủ sổ nhận 2 giọt vào kho riêng mỗi ngày.
+- activityRewardRulesVersion 1 giữ các khoản thưởng từ bảng mới. Mốc cấp 9 chuyển sang 198 ở ngày kế tiếp. Thưởng Thái Lan dựa trên mục tiêu của ngày đạt 300 phút. Tải lại các thiết bị sau khi phát hành để đồng bộ bảng thưởng.
 - autoQuestVersion 1 chặn phiên bản app cũ xóa mất lượt quest tự động. Sau khi phát hành quy tắc và mã mới, tải lại cả hai thiết bị để mọi máy dùng cùng phiên bản.
 - Notes notesVersion 2 lưu taskOrder và pinnedId. carriedIds/carriedTo trên nguồn cũ giữ tiến độ chuyển từng phần khi hôm nay đủ 300 mục, tránh phục hồi lại mục đã chủ động xóa. Bộ đếm trong khung cây chỉ hiển thị kho chưa tưới của hồ sơ hiện tại; thanh nước chỉ tính lượng đã tưới, hồng bên trái và xanh biển bên phải.
 - Firestore giữ dữ liệu đã đọc khi mất mạng. Thay đổi chỉ báo thành công sau khi máy chủ xác nhận. Lịch sử IndexedDB của bản cũ vẫn ở trình duyệt gốc.

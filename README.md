@@ -24,11 +24,13 @@ Khi có phiên bản mới, app hiện **Tải lại**. Hoàn tất phần đang
 
 - Chạm nhân vật của bạn để chọn **Hiện tại**, **+1h** hoặc **+2h**. Các mốc tương lai tính từ thời điểm mở một lịch mới, lưu cho từng hồ sơ và có thể sửa hoặc bỏ. Lịch đã lưu giữ nguyên giờ sau khi tải lại. Nếu ứng dụng đóng, lần mở có kết nối tiếp theo sẽ tính lại các phiên theo đúng giờ đã hẹn.
 - Nhận nước xong, hoạt động vẫn tiếp tục. Thời gian ngắt quãng cộng dồn trong ngày; mỗi hoạt động chỉ nhận nước một lần/ngày. Ngủ nhận 5 hoặc 10 giọt ở lần thức dậy đủ điều kiện đầu tiên.
-- Cây có **9 cấp**, mỗi cấp cần **10 ngày đủ nước**. Mốc khởi đầu lần lượt là **62, 72, 82, 92, 102, 112, 122, 132, 153** giọt. Cấp 1–8 tăng 1 giọt sau ngày đủ nước, tối đa 9 lần trong cấp. Cấp 9 giữ 153 giọt, bằng 85% mức tối đa 180 giọt của hai hồ sơ. Mốc 150 của hồ sơ đã có được giữ đến hết ngày chuyển đổi.
+- Cây có **9 cấp**, mỗi cấp cần **10 ngày đủ nước**. Mốc khởi đầu lần lượt là **62, 72, 82, 92, 102, 112, 122, 132, 198** giọt. Cấp 1–8 tăng 1 giọt sau ngày đủ nước, tối đa 9 lần trong cấp. Cấp 9 dùng 85% của 232 giọt từ hoạt động thường và nhiệm vụ, làm tròn lên. Phần thưởng Thái Lan tính riêng. Mốc cấp 9 đang dùng được giữ đến hết ngày cập nhật.
 - Thiếu nước khi hết khiên làm mất tối đa 5 ngày tiến độ và giảm mục tiêu tương ứng. Ba ngày thiếu liên tiếp làm lùi một cấp. Ngày lên cấp có ánh sáng ấm phía sau cây.
 - **PPA** có “Đi chơi Thái Lan”. **TBV** có “Học tiếng Pháp”, đủ 40 phút nhận 8 giọt một lần/ngày, có thưởng học cùng nhau và dùng chung giới hạn học 20 giọt.
+- PPA đi chơi Thái Lan đủ 5 tiếng nhận một nửa mục tiêu tưới của ngày đạt mốc, làm tròn lên, một lần/ngày. Các phiên trong cùng ngày được cộng dồn như hoạt động khác. Giọt thưởng được đưa vào kho để tưới.
+- Vệ sinh 10 phút, chợp mắt 20 phút, chăm Cofi 15 phút và dùng bữa 15 phút nhận 2 giọt mỗi hoạt động. Đi bộ 25 phút nhận 4 giọt. Đi học và họp áp dụng mốc của nhóm học và nhóm làm việc. Việc đi lại nhận 2 giọt mỗi hoạt động, tối đa 4 giọt trong nhóm. Gặp gỡ và về quê nhận 3 giọt mỗi hoạt động, tối đa 6 giọt trong nhóm. Mở **?** trong app để xem các mốc.
 
-Cập nhật **firestore.rules trước khi đưa mã mới lên Pages**, rồi tải lại trên cả hai thiết bị. Mục tiêu cũ còn đạt được giữ tới hết ngày nâng cấp; mốc cũ 186 giọt được điều chỉnh về mức hiện tại. Nước đã có và nhật ký ngày cũ được giữ.
+Cập nhật **firestore.rules trước khi đưa mã mới lên Pages**, rồi tải lại trên cả hai thiết bị. Mục tiêu cũ còn đạt được giữ tới hết ngày nâng cấp, cùng với nước đã có và lịch sử tưới.
 
 ## Giao diện hằng ngày
 

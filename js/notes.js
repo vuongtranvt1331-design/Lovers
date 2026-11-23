@@ -1,6 +1,6 @@
-import { PocketDB } from "./db.js?v=pocket-ios-4";
+import { PocketDB } from "./db.js?v=pocket-ios-5";
 import { DAY_MS, GAME_TIME_ZONE, dateStart, offsetDay, today } from "./gameTime.js";
-import { createFocusNote } from "./focusNote.js?v=pocket-ios-4";
+import { createFocusNote } from "./focusNote.js?v=pocket-ios-5";
 
 const WEEKDAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const RESERVED_ROWS = 8;

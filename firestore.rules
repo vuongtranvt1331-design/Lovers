@@ -126,7 +126,7 @@ service cloud.firestore {
       let growthDays = plant.get('stageGrowthDays', 0);
       let stage = data.currentStage - 1;
       let legacy = data.targetWater in [40, 55, 70, 85, 100];
-      let expected = [62, 72, 82, 92, 102, 112, 122, 132, 153][stage]
+      let expected = [62, 72, 82, 92, 102, 112, 122, 132, 198][stage]
         + (stage < 8 ? growthDays : 0);
       return data.targetWater is int && data.targetWater == plant.targetDrops
         && ((version < 1 && legacy) || (version == 1 && data.currentStage <= 5
@@ -161,6 +161,7 @@ service cloud.firestore {
         && request.resource.data.plant.get('rewardReceiptVersion', 0) >= resource.data.plant.get('rewardReceiptVersion', 0)
         && request.resource.data.plant.get('autoQuestVersion', 0) >= resource.data.plant.get('autoQuestVersion', 0)
         && request.resource.data.plant.get('balanceVersion', 0) >= resource.data.plant.get('balanceVersion', 0)
+        && request.resource.data.plant.get('activityRewardRulesVersion', 0) >= resource.data.plant.get('activityRewardRulesVersion', 0)
         && request.resource.data.plant.get('activityScheduleVersion', 0) >= resource.data.plant.get('activityScheduleVersion', 0)
         && historyPreserved(resource.data.plant.waterHistoryByDate,
           request.resource.data.plant.waterHistoryByDate, resource.data.plant.date)

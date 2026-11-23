@@ -1,4 +1,4 @@
-import { PocketDB } from "./db.js?v=pocket-ios-4";
+import { PocketDB } from "./db.js?v=pocket-ios-5";
 import { today } from "./gameTime.js";
 
 export function createFocusNote(currentProfile, canAct, openNotes) {

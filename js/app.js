@@ -2,14 +2,14 @@ import {
   ACTIVITY_GROUPS, ACTIVITY_TITLES, canSelectActivity, DAILY_QUESTS,
   STAGE_TARGETS, STAGE_DAILY_INCREASES, STAGE_GROWTH_DAY_CAP, STAGE_MAINTENANCE_RATIO, STAGE_PROGRESSION_DAYS,
   DAILY_WATER_MAX_BY_PROFILE, DAILY_WATER_MAX, WATER_REWARDS, WATER_ACTIVITY_MINUTES,
-} from "./catalog.js?v=pocket-ios-4";
+} from "./catalog.js?v=pocket-ios-5";
 import { AudioEngine } from "./audio.js";
-import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=pocket-ios-4";
-import { FocusState } from "./state.js?v=pocket-ios-4";
-import { Timeline } from "./timeline.js?v=pocket-ios-4";
-import { createQuestDrawer } from "./quests.js?v=pocket-ios-4";
-import { createNotesDrawer } from "./notes.js?v=pocket-ios-4";
-import { PocketDB } from "./db.js?v=pocket-ios-4";
+import { CanvasRenderer, AnimationManager } from "./canvasRenderer.js?v=pocket-ios-5";
+import { FocusState } from "./state.js?v=pocket-ios-5";
+import { Timeline } from "./timeline.js?v=pocket-ios-5";
+import { createQuestDrawer } from "./quests.js?v=pocket-ios-5";
+import { createNotesDrawer } from "./notes.js?v=pocket-ios-5";
+import { PocketDB } from "./db.js?v=pocket-ios-5";
 import { offsetDay } from "./gameTime.js";
 
 const FocusUI = (() => {
@@ -19,7 +19,8 @@ const FocusUI = (() => {
     "chooseTBV", "plantCanvas", "plantPoke", "plantStage", "plantStageNumber", "plantStageName", "plantStatus", "partnerWater",
     "ownWater", "waterTotal", "waterTarget", "waterPartnerBar", "waterOwnBar", "rulesDialog", "rulesClose",
     "plantHelp", "plantGallery", "plantGalleryClose", "plantGalleryGrid", "rulesStreak", "galleryStreak",
-    "ruleSleep", "ruleStudy", "ruleFocus", "ruleSport", "ruleChores", "ruleStageGrowth", "ruleStageMaintenance",
+    "ruleSleep", "ruleStudy", "ruleFocus", "ruleSport", "ruleChores", "ruleDailyActivities",
+    "ruleSocial", "ruleThailand", "ruleStageGrowth", "ruleStageMaintenance",
     "plantAvailable", "plantWaterBalance", "plantWaterDialog", "plantWaterClose", "plantWaterDescription", "plantWaterConfirm",
     "plantPPACanvas", "plantTBVCanvas", "plantWaterHeart",
     "streakText", "streakDots", "streakHint", "streakBadge", "streakBadgeText",
@@ -430,18 +431,30 @@ const FocusUI = (() => {
     ui.ruleSleep.textContent = "Cộng thời lượng các giấc ngủ kết thúc trong ngày. Lần thức dậy đầu tiên đạt mốc sẽ nhận thưởng: đủ "
       + shortSleep.minutes / 60 + " giờ nhận " + shortSleep.reward + " giọt, đủ "
       + fullSleep.minutes / 60 + " giờ nhận " + fullSleep.reward + " giọt. Nhận một lần mỗi ngày.";
-    ui.ruleStudy.textContent = rewardSummary(study);
-    ui.ruleFocus.textContent = rewardSummary(focus);
+    ui.ruleStudy.textContent = "Áp dụng cho học bài, học tiếng Pháp và đi học. " + rewardSummary(study);
+    ui.ruleFocus.textContent = "Áp dụng cho làm việc ở nhà, tập trung, dạy học và họp. " + rewardSummary(focus);
     ui.ruleSport.textContent = "Chạy " + out_running + " phút hoặc tập gym " + out_gym
       + " phút nhận " + sport.reward + " giọt. Mỗi hoạt động nhận một lần/ngày, tổng tối đa " + sport.cap + " giọt mỗi người.";
     ui.ruleChores.textContent = "Nấu " + home_cooking + " phút hoặc dọn " + home_chores
       + " phút nhận " + chores.reward + " giọt. Mỗi hoạt động nhận một lần/ngày, tổng tối đa " + chores.cap + " giọt mỗi người.";
+    const { care, nutrition, walking, mobility, connection, thailand } = WATER_REWARDS;
+    ui.ruleDailyActivities.textContent = "Vệ sinh " + WATER_ACTIVITY_MINUTES.home_morning + " phút, chợp mắt "
+      + WATER_ACTIVITY_MINUTES.home_nap + " phút hoặc chơi với Cofi " + care.minutes + " phút nhận " + care.reward
+      + " giọt mỗi việc. Dùng bữa " + nutrition.minutes + " phút nhận " + nutrition.reward + " giọt. Đi bộ "
+      + walking.minutes + " phút nhận " + walking.reward + " giọt. Ghé cửa hàng hoặc về nhà "
+      + mobility.minutes + " phút, hoặc lái xe đường dài " + WATER_ACTIVITY_MINUTES.travel_driving_long + " phút nhận "
+      + mobility.reward + " giọt mỗi việc, tối đa " + mobility.cap + " giọt trong nhóm đi lại.";
+    ui.ruleSocial.textContent = "Hẹn cà phê hoặc ăn ngoài " + connection.minutes + " phút, hoặc về quê "
+      + WATER_ACTIVITY_MINUTES.travel_hometown + " phút nhận " + connection.reward + " giọt mỗi việc, tối đa "
+      + connection.cap + " giọt/ngày.";
+    ui.ruleThailand.textContent = "Đủ " + thailand.minutes / 60
+      + " tiếng nhận một nửa mục tiêu tưới của ngày đạt mốc, làm tròn lên. Mỗi ngày nhận một lần.";
     ui.ruleStageGrowth.textContent = "Giai đoạn 1–8 bắt đầu ở " + STAGE_TARGETS.slice(0, -1).join(", ")
       + " giọt. Sau mỗi ngày tưới đủ, mốc ngày kế tiếp tăng lần lượt " + STAGE_DAILY_INCREASES.slice(0, -1).join(", ")
       + " giọt, tối đa " + STAGE_GROWTH_DAY_CAP + " lần mỗi giai đoạn. Mất 5 ngày tiến độ thì mốc nước giảm tương ứng; khiên giữ cả tiến độ và mốc nước.";
     ui.ruleStageMaintenance.textContent = "Giai đoạn 9 giữ mốc " + STAGE_TARGETS.at(-1)
       + " giọt mỗi ngày. Mốc này bằng " + Math.round(STAGE_MAINTENANCE_RATIO * 100) + "% của "
-      + DAILY_WATER_MAX + " giọt tối đa cho cả hai, làm tròn lên. Tối đa mỗi ngày: PPA "
+      + DAILY_WATER_MAX + " giọt từ hoạt động thường và nhiệm vụ, làm tròn lên. Chưa gồm thưởng Thái Lan. Tối đa mỗi ngày: PPA "
       + DAILY_WATER_MAX_BY_PROFILE.ppa + " giọt, TBV " + DAILY_WATER_MAX_BY_PROFILE.tbv + " giọt.";
   }
 

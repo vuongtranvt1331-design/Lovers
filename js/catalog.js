@@ -62,16 +62,33 @@ export const WATER_REWARDS = {
   focus: { category: "focus", minutes: 50, reward: 6, cap: 24, pairGroup: "work" },
   sport: { category: "sport", minutes: 30, reward: 10, cap: 20 },
   chores: { category: "chores", minutes: 30, reward: 4, cap: 8 },
+  care: { category: "care", minutes: 15, reward: 2, cap: 6 },
+  nutrition: { category: "nutrition", minutes: 15, reward: 2, cap: 2 },
+  walking: { category: "walking", minutes: 25, reward: 4, cap: 4 },
+  mobility: { category: "mobility", minutes: 20, reward: 2, cap: 4 },
+  connection: { category: "connection", minutes: 45, reward: 3, cap: 6 },
+  thailand: { category: "thailand", minutes: 300, reward: null, targetShare: 0.5, cap: null },
 };
-export const WATER_ACTIVITY_MINUTES = { out_running: 30, out_gym: 20, home_cooking: 20, home_chores: 30 };
+export const WATER_ACTIVITY_MINUTES = {
+  out_running: 30, out_gym: 20, home_cooking: 20, home_chores: 30,
+  home_morning: 10, home_nap: 20, travel_driving_long: 60, travel_hometown: 60,
+};
 export const WATER_ACTIVITY_CATEGORIES = {
   home_sleeping: "sleep", home_studying: "study", home_french_studying: "study",
   home_desk_work: "focus", work_locked_in: "focus", work_teaching: "focus", office_focus_typing: "focus",
   out_running: "sport", out_gym: "sport", home_cooking: "chores", home_chores: "chores",
+  out_going_to_school: "study", work_meeting: "focus",
+  home_morning: "care", home_nap: "care", home_play_with_cofi: "care",
+  home_eating: "nutrition", out_walking: "walking",
+  out_errand: "mobility", out_heading_home: "mobility", travel_driving_long: "mobility",
+  social_cafe: "connection", social_dining: "connection", travel_hometown: "connection",
+  travel_thailand: "thailand",
 };
 
 export const DAILY_WATER_MAX_BY_PROFILE = Object.fromEntries(["ppa", "tbv"].map(profile => {
   const activityMaximum = Object.entries(WATER_REWARDS).reduce((sum, [category, rule]) => {
+    // Calculate the quota independently of the trip bonus that depends on it.
+    if (rule.targetShare != null) return sum;
     const eligibleCount = Object.entries(WATER_ACTIVITY_CATEGORIES)
       .filter(([activity, group]) => group === category && canSelectActivity(profile, activity)).length;
     const award = rule.pairGroup ? Math.ceil(rule.reward * 1.2) : rule.reward;
